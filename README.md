@@ -1,14 +1,14 @@
 # TutorConnect
 
-TutorConnect connects students who want coaching with tutors who offer subject-specific sessions. Milestone 1 is a layered Spring Boot skeleton. It creates the five core tables, loads sample data, and exposes two read endpoints. Later milestones add booking, login, and the remaining features.
+The TutorConnect is a project to connect students who need to be tutored and tutors who can tutor in specific subject. In this phase (Milestone 1) we will create a layered Spring Boot framework skeleton. In this phase we will create five core data tables, load sample data and provide two read endpoints. The next phase will be adding reservation, login and other features.
 
-There is no ORM. Each endpoint follows:
+This project does not use the ORM framework. The processing workflow for each endpoint is as follows:
 
 ```text
 Controller → Service → Repository → JdbcTemplate → Database → DTO
 ```
 
-## Endpoints
+## Endpoint
 
 `GET /`
 
@@ -16,7 +16,7 @@ Controller → Service → Repository → JdbcTemplate → Database → DTO
 HomeController → HomeService → HomeRepository → JdbcTemplate → Database → HomeDto
 ```
 
-Returns application name, scenario, provider/service/open-slot counts, and provider names loaded from the database.
+Return the application name, scenario description, number of mentors/services/free time slots, and the mentor name loaded from the database.
 
 `GET /slots`
 
@@ -24,9 +24,9 @@ Returns application name, scenario, provider/service/open-slot counts, and provi
 SlotController → SlotService → SlotRepository → JdbcTemplate → Database → SlotDto
 ```
 
-Returns each availability slot with its tutor, service, time window, and `OPEN` or `BOOKED` status. A slot is `BOOKED` when an appointment row references it.
+Return detailed information for each available slot (slot), including the mentor, service, time slot and status (`OPEN` or `BOOKED`). When there is an appointment record referencing that time slot, the time slot status is `BOOKED` (booked).
 
-## Project layout
+## Project structure
 
 ```text
 ├── pom.xml
@@ -53,33 +53,33 @@ Returns each availability slot with its tutor, service, time window, and `OPEN` 
             └── seed.sql
 ```
 
-Spring MVC `DispatcherServlet` is the Front Controller. `HomeController` and `SlotController` only accept the HTTP request and delegate to the service layer.
+The `DispatcherServlet` in Spring MVC acts as the current front controller. `HomeController` and `SlotController` are responsible only for receiving HTTP requests and delegating the processing logic to the service layer.
 
 ## Database
 
-`schema.sql` creates five tables. Each has a surrogate primary key. Foreign keys express ownership and reservation:
+The `schema.sql` script created five tables. Each table contains a surrogate primary key (surrogate primary key). Foreign keys are used to represent the relationship of belonging and reservation:
 
-| Table | Relationship |
+| Name of the table | Relationship |
 | --- | --- |
-| `users` | Student and tutor accounts. `email` is unique. `role` is `CUSTOMER` or `PROVIDER`. |
-| `providers` | At most one tutor profile per user (`user_id` unique). |
-| `services` | Many services per provider. `duration_minutes > 0`. |
-| `availability_slots` | Many slots per service. `end_time > start_time`. The same service cannot repeat an identical window. |
-| `appointments` | A student books a slot. `slot_id` is unique. |
+| `users` | Student and mentor accounts. Email field is unique. `role` field is `CUSTOMER` or `PROVIDER`. |
+| `providers` | Each user can correspond to at most one mentor's information (`user_id` is unique). |
+| `services` | Each mentor provides multiple services. `duration_minutes > 0`. |
+| `availability_slots` | Each service includes multiple available time slots. `end_time > start_time`. A service cannot be used in the same time slot. |
+| Reservation | Students reserve a time slot (slot), which is identified by a unique `slot_id`. |
 
-Double-booking guard:
+Mechanism to prevent duplicate reservations:
 
 ```sql
 CONSTRAINT uq_appointment_slot UNIQUE (slot_id)
 ```
 
-After one appointment references a slot, the database rejects a second appointment for that same slot.
+Once a reservation is associated with a time slot, the database will refuse second reservation requests for the same time slot.
 
-`seed.sql` loads two students, two tutors, three services, five slots, and one booked appointment. `application.properties` points Spring Boot at an in-memory H2 database and runs both scripts on startup.
+The `seed.sql` script will pre-load two students, two tutors, three services, five time slots, and one confirmed appointment record. The `application.properties` configuration will use the H2 database in Spring Boot's memory and execute the relevant script when the application starts.
 
 ## Run
 
-Requires JDK 17 or newer and Maven.
+Requires JDK 17 or later and Maven.
 
 ```bash
 mvn spring-boot:run
@@ -92,7 +92,7 @@ curl http://localhost:8080/
 curl http://localhost:8080/slots
 ```
 
-Tests cover both endpoints against the seeded database:
+The test targeting pre-loaded data covers the two endpoints above:
 
 ```bash
 mvn test
