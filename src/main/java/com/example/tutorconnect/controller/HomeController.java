@@ -8,14 +8,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class HomeController {
 
-    private final HomeService homeService;
+  private final HomeService homeService;
 
-    public HomeController(HomeService homeService) {
-        this.homeService = homeService;
-    }
+  public HomeController(HomeService homeService) {
+    this.homeService = homeService;
+  }
 
-    @GetMapping("/")
-    public HomeDto home() {
-        return homeService.getHome();
-    }
+  @GetMapping("/api/home")
+  public HomeDto home() {
+    return homeService.getHome();
+  }
 }

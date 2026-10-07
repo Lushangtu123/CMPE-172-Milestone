@@ -1,22 +1,25 @@
 package com.example.tutorconnect.controller;
 
-import com.example.tutorconnect.dto.SlotDto;
+import com.example.tutorconnect.dto.SlotPage;
 import com.example.tutorconnect.service.SlotService;
-import java.util.List;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import java.time.LocalDate;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 public class SlotController {
+  private final SlotService slots;
 
-    private final SlotService slotService;
+  public SlotController(SlotService slots) {
+    this.slots = slots;
+  }
 
-    public SlotController(SlotService slotService) {
-        this.slotService = slotService;
-    }
-
-    @GetMapping("/slots")
-    public List<SlotDto> slots() {
-        return slotService.getSlots();
-    }
+  @GetMapping("/api/slots")
+  public SlotPage slots(
+      @RequestParam(required = false) Long providerId,
+      @RequestParam(required = false) Long serviceId,
+      @RequestParam(required = false) LocalDate date,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "6") int size) {
+    return slots.available(providerId, serviceId, date, page, size);
+  }
 }
