@@ -1,27 +1,29 @@
-# CMPE 172 - Milestone 3 Report
+# TutorConnect Milestone 3 report
 
-TutorConnect | Yinqi Chen | October 18, 2026
+Integration distribution and deployment
 
-## 1. Distribution boundary and interface
+Yinqi Chen | CMPE 172 | October 18, 2026
 
-TutorConnect Milestone 3 extends the existing JDBC appointment scheduler with a mock notification boundary, fault handling, observability, Docker packaging and CI. Customers continue to book and cancel through the original session-authenticated interface.
+## 1 Distribution boundary and interface
+
+TutorConnect sends booking and cancellation notifications after the appointment transaction commits. If the notification service is slow or unavailable, the appointment still succeeds and a database outbox keeps the event for another attempt. This milestone adds that HTTP integration to the existing JDBC scheduler, along with logging, health checks, metrics, Docker deployment and CI. Customers keep using the original interface with session authentication.
 
 ![Distribution boundary](distribution.png)
 
-The required Client -> Appointment Scheduler -> Notification Service boundary is an actual HTTP call through NotificationGateway, not a direct Java method call. The mock is a second Spring controller in the same app container, as permitted by the assignment. The dotted boundary in the diagram makes this deployment choice explicit; it does not imply a separate notification container.
+NotificationGateway makes the HTTP call from the Appointment Scheduler to the Notification Service. The mock service is a second Spring controller in the same app container, which the assignment permits. The dotted boundary in the diagram shows this shared deployment. There is no separate notification container.
 
-### One coarse-grained request
+### One request for each notification
 
 ```
 public record NotificationRequest(String eventId,
     String recipient, String type, String message) {}
 ```
 
-The DTO contains everything the mock needs to record a notification. It avoids separate remote calls for customer details, appointment details and message fragments. The scheduler owns appointment rules; the notification interface owns acceptance and deduplication. BOOKING_CONFIRMED and CANCELLATION_CONFIRMED share the same interface. A future reminder channel can reuse this boundary with an added supported message type.
+The DTO gives the mock everything it needs to record one notification. Customer details, appointment details and message fragments do not require separate remote calls. The scheduler handles appointment rules, while the notification interface handles acceptance and deduplication. Both BOOKING_CONFIRMED and CANCELLATION_CONFIRMED use this interface. A future reminder channel could use it by adding a supported message type.
 
-## 2. Commit-then-notify and durable fallback
+## 2 Committing the appointment before sending
 
-BookingTransaction inserts the appointment and its notification_outbox event in the same READ_COMMITTED transaction. Cancellation updates the appointment and inserts a distinct cancellation event in its own transaction. If either transaction fails, its business change and event both roll back.
+BookingTransaction inserts the appointment and its notification_outbox event in the same READ_COMMITTED transaction. Cancellation updates the appointment and inserts a separate cancellation event in its own transaction. If a transaction fails, both the appointment change and its event roll back.
 
 ```
 // BookingTransaction.book: inside @Transactional
@@ -30,7 +32,7 @@ notifications.enqueue(user, id, "BOOKING_CONFIRMED");
 return id;
 ```
 
-AppointmentService.book/cancel use NOT_SUPPORTED to suspend any caller transaction. The facade calls the separate transactional Spring bean, waits for it to return committed, then dispatches the event. This is a proxy-based commit boundary: remote I/O is not included in the SQL transaction. NotificationGateway also checks that no actual transaction is active before attempting HTTP.
+AppointmentService.book/cancel use NOT_SUPPORTED to suspend a caller's transaction. The facade calls a separate transactional Spring bean and waits for that call to return after commit. It then dispatches the notification. Returning through the Spring proxy establishes the commit boundary, so the SQL transaction ends before remote I/O begins. NotificationGateway also checks that no actual transaction is active before making the HTTP request.
 
 ```
 // AppointmentService.book: transaction already committed
@@ -40,19 +42,19 @@ notifications.afterCommit(id, "BOOKING_CONFIRMED");
 return id;
 ```
 
-The outbox row is the fallback. A crash between commit and the first network attempt leaves a PENDING row for recovery. A network failure does not roll back the already committed booking or turn an otherwise successful booking into a notification error. Unexpected dispatch exceptions are logged and leave the persisted event available for another cycle.
+The persisted outbox covers a crash between commit and the first network attempt: the event remains PENDING for the recovery worker. A network failure cannot roll back the committed appointment or change a successful booking into a notification error. The dispatcher logs unexpected exceptions and leaves the stored event available for another delivery cycle.
 
-### Recovery behavior
+### Recovering pending events
 
-Every 15 seconds, NotificationRecovery selects at most 20 due PENDING events. Eligible rows are ordered by next_attempt_at, created_at and event_id. Failed retry cycles move their next attempt into the future, so long-failing older records cannot monopolize the first batch forever. A 21-record regression test reproduces and protects this fairness property.
+Every 15 seconds, NotificationRecovery selects up to 20 due PENDING events, ordered by next_attempt_at, created_at and event_id. After a failed cycle, the event's next attempt moves into the future. This lets newer due events reach the worker even when older events keep failing. A regression test with 21 records checks that behavior.
 
-Successful delivery marks the event SENT. Transient failure leaves it PENDING with updated attempts, error category and next attempt time. A permanent rejection marks it FAILED, logs ERROR and requires operator review. After fixing the cause, an operator can reset a FAILED row to PENDING; stable event IDs make replays safe for this mock.
+Successful delivery changes the event to SENT. A transient failure leaves it PENDING and updates the attempt count, error category and next attempt time. A permanent rejection changes it to FAILED and produces an ERROR log for operator review. Once the cause is fixed, an operator can reset the row to PENDING. Replaying its stable event ID is safe for this mock receiver.
 
-## 3. Timeouts, retries and idempotency
+## 3 Timeouts retries and idempotency
 
-### Bounded remote calls
+### Bounding the remote call
 
-Defaults are a 200 ms connection timeout, a 300 ms complete-response deadline, up to three attempts and 25 ms between attempts. The gateway uses Java HttpClient sendAsync and waits on the complete response future with a deadline. It cancels timed-out futures rather than waiting indefinitely for a response body. The first delivery cycle therefore has a bounded configured wait; database operations and scheduling add separate overhead.
+The default settings allow 200 ms to connect and 300 ms for a complete response, with up to three attempts and a 25 ms delay between attempts. The gateway calls Java HttpClient sendAsync, waits on the complete response future and cancels that future if the deadline expires. It therefore bounds the configured wait for the first delivery cycle. Database operations and scheduling add their own overhead.
 
 ```
 pending = http.sendAsync(request,
@@ -63,11 +65,11 @@ int status = pending.get(
 // On TimeoutException: pending.cancel(true).
 ```
 
-Connection failures, timeouts, HTTP 408, HTTP 429 and 5xx responses are retryable. Other non-success statuses become permanent failures. Redirects are not followed, preventing service credentials from being forwarded to a redirected host. Interrupted requests preserve the interrupt flag and stop their retry loop. Database lock retries from Milestone 2 remain separate from notification retries.
+The gateway retries connection failures, timeouts, HTTP 408, HTTP 429 and 5xx responses. Other non-success statuses are permanent failures. It does not follow redirects, so the service credential cannot be forwarded to a redirected host. An interrupted request preserves the interrupt flag and stops retrying. These notification retries are separate from the database lock retries in Milestone 2.
 
-### Idempotent attempts and durable acceptance
+### Handling repeated requests
 
-The event ID is derived from appointment ID and notification type. The DTO is serialized once per delivery cycle; retries reuse the same ID and payload. notification_receipts has event_id as its primary key and stores a SHA-256 hash of the normalized DTO. First acceptance returns 201. An exact replay returns 200 without another stored receipt. Reusing the key with changed content returns 409.
+Each event ID comes from the appointment ID and notification type. The DTO is serialized once per delivery cycle, and every retry uses the same ID and payload. The notification_receipts table uses event_id as its primary key and stores a SHA-256 hash of the normalized DTO. The receiver returns 201 for first acceptance, 200 for an identical replay and 409 if the same ID arrives with different content. An identical replay does not create another receipt.
 
 ```
 CREATE TABLE IF NOT EXISTS notification_receipts (
@@ -79,11 +81,11 @@ CREATE TABLE IF NOT EXISTS notification_receipts (
 );
 ```
 
-Delivery is at-least-once at the HTTP boundary, with one stored side effect per event in this mock. A receiver may accept a request even when the client loses its acknowledgment; a later replay is therefore expected. This is not a claim of exactly-once delivery to an arbitrary external email system. Different book/cancel events may arrive out of order during an outage; strict cross-event ordering is outside this milestone implementation.
+The HTTP boundary provides at-least-once delivery, with one stored side effect per event in this mock. A receiver can accept a request even if its acknowledgment never reaches the client, so later replays are expected. This guarantee does not extend to exactly-once delivery through an arbitrary external email system. Separate booking and cancellation events may also arrive out of order during an outage; this implementation does not enforce ordering across events.
 
-## 4. Logging, health and metrics
+## 4 Logging health and metrics
 
-### Logging plan and emitted examples
+### Log levels and examples
 
 | Level | Example emitted event | Purpose |
 | --- | --- | --- |
@@ -94,15 +96,15 @@ Delivery is at-least-once at the HTTP boundary, with one stored side effect per 
 | ERROR | notification_rejected eventId=... reason=HTTP_400 action=manual_review | Permanent rejection |
 | ERROR | health_database_down sqlState=08001 | Database health failure |
 
-The new notification logs use identifiers, type, attempt count and fixed failure categories. They do not log recipient addresses, notification messages, passwords or the service token. Runtime errors are handled server-side; ordinary client responses do not expose stack traces.
+Notification logs contain identifiers, notification type, attempt count and fixed failure categories. They omit recipient addresses, message contents, passwords and the service token. The server handles runtime errors without exposing stack traces in ordinary client responses.
 
-### Database-aware health endpoint
+### Checking database health
 
-Public GET /health obtains a pooled connection, runs SELECT 1 with a one-second statement timeout and returns {"status":"UP","database":"UP"} with HTTP 200. SQLException returns {"status":"DOWN","database":"DOWN"} with HTTP 503 and no connection details. The configured Hikari connection acquisition timeout is one second. The Docker image uses this endpoint through a small Java health probe.
+Public GET /health obtains a pooled connection and runs SELECT 1 with a one-second statement timeout. Success returns {"status":"UP","database":"UP"} and HTTP 200. A SQLException returns {"status":"DOWN","database":"DOWN"} and HTTP 503 without connection details. Hikari also has a one-second connection acquisition timeout. A small Java probe calls this endpoint for the Docker health check.
 
-### Provider-only metric endpoint
+### Reading provider metrics
 
-GET /api/provider/metrics requires a PROVIDER session. Micrometer records successful/failed bookings, cancellations, delivered notifications and a booking latency timer. The DTO also queries persistent PENDING/FAILED outbox counts. Average booking latency measures the service call, including its initial notification cycle. Metric names and tags have bounded cardinality; user or appointment IDs are never metric labels.
+GET /api/provider/metrics requires a PROVIDER session. Micrometer counts successful and failed bookings, cancellations and delivered notifications, and records booking latency with a timer. The response also includes PENDING and FAILED counts read from the outbox. Average booking latency covers the service call, including its first notification cycle. Metric names and tags have bounded cardinality; user and appointment IDs are never labels.
 
 ```
 {
@@ -113,13 +115,13 @@ GET /api/provider/metrics requires a PROVIDER session. Micrometer records succes
 }
 ```
 
-The metric example above is rounded from a real container smoke run. Micrometer counters/timers reset on JVM restart; persisted queue rows and receiver receipts survive application restarts. No external monitoring backend is required for this milestone.
+This example is rounded from a real container smoke run. Micrometer counters and timers reset when the JVM restarts. Queue rows and receiver receipts remain in the database across application restarts. The milestone does not require an external monitoring backend.
 
-## 5. Docker deployment and CI
+## 5 Docker deployment and CI
 
-Dockerfile uses a Maven/Temurin Java 17 build stage and a Temurin Java 17 JRE runtime stage. Only the executable JAR and compiled health probe enter the runtime. The container runs as non-root UID/GID 10001. Its health check polls /health. The .dockerignore excludes Git metadata, build output and unrelated artifacts.
+Dockerfile builds the application with Maven and Temurin Java 17, then uses a Temurin Java 17 JRE for the runtime stage. Only the executable JAR and compiled health probe enter the runtime image. The container runs as non-root UID/GID 10001 and checks /health. The .dockerignore file excludes Git metadata, build output and unrelated artifacts.
 
-docker-compose.yml runs app plus MySQL 8.4. The app waits for the database TCP health check. The project and volume names match the prior Compose configuration so an existing Milestone 2 volume can be reused. Existing bookings are not dropped. NotificationSchemaInitializer applies CREATE TABLE IF NOT EXISTS statements for the two new tables at app startup; a container-init mount alone would not initialize an already-existing volume.
+docker-compose.yml runs the app and MySQL 8.4. The app waits for the database's TCP health check to pass. The Compose project and volume names match Milestone 2, allowing an existing volume to be reused without dropping bookings. At startup, NotificationSchemaInitializer runs CREATE TABLE IF NOT EXISTS for the two notification tables. This also handles existing volumes, where container initialization scripts would not run again.
 
 ```
 docker compose up -d --build --wait
@@ -127,21 +129,21 @@ curl -s http://localhost:8080/health
 python3 scripts/smoke.py --base-url http://localhost:8080
 ```
 
-Notification calls target the mock controller over loopback HTTP inside the app container. NOTIFICATION_URL and NOTIFICATION_SERVICE_TOKEN configure the gateway and shared service key. The internal stateless security chain requires that key, while the customer/provider routes retain Session RBAC and browser CSRF protection. The supplied credentials are local demo configuration; no real messaging channel is configured.
+The gateway reaches the mock controller through loopback HTTP inside the app container. NOTIFICATION_URL sets the destination, and NOTIFICATION_SERVICE_TOKEN sets the shared service key. A stateless security chain requires that key for internal requests. Customer and provider routes retain Session RBAC and browser CSRF protection. The supplied credentials are for the local demo, and no real messaging channel is configured.
 
-### GitHub Actions
+### GitHub Actions workflow
 
-The existing workflow runs on push and pull_request. One job runs Maven verify with H2 on Java 17, builds the application image, starts its demo profile and executes the Python HTTP smoke script. A second job provisions MySQL 8.4 and runs the same Maven suite against a dedicated test database. Failure diagnostics include container logs; cleanup removes the ephemeral CI container.
+The workflow runs on push and pull_request. One job runs Maven verify with H2 on Java 17, builds the application image, starts its demo profile and runs the Python HTTP smoke script. A second job starts MySQL 8.4 and runs the same Maven suite against a dedicated test database. Container logs are available for failure diagnosis, and cleanup removes the temporary CI container.
 
-### Failure scenario and recovery
+### Notification outage and recovery
 
-If the notification endpoint is unavailable, the appointment still commits and the API returns 201. Bounded attempts fail into PENDING. Once the service returns, the recovery worker reuses the same event and marks it SENT after acceptance. If the application restarts during the outage, MySQL retains the event. A notification outage is not treated as a reason to undo the customer appointment.
+When the notification endpoint is unavailable, the appointment still commits and the booking API returns 201. After the bounded attempts fail, the event remains PENDING. When the service returns, the recovery worker sends the same event and changes it to SENT after acceptance. MySQL retains the event if the application restarts during the outage, so recovery does not depend on keeping the JVM running.
 
-A healthy Docker application does not mean every optional downstream notification is currently delivered. /health focuses on database-backed application readiness; queue counts and WARN/ERROR events expose notification degradation. A health-check failure marks a Docker container unhealthy; the restart policy restarts exited processes, not merely unhealthy ones.
+A healthy application container can still have undelivered notifications. The /health endpoint checks whether the application can use its database; queue counts and WARN or ERROR logs show notification problems. Docker marks a failed health check as unhealthy. Its restart policy restarts an exited process, but does not restart a process merely because its container is unhealthy.
 
-## 6. Tests and validation evidence
+## 6 Tests and validation evidence
 
-Validation date: October 18, 2026 (America/Los_Angeles). The final 52-test suite passed with H2 and MySQL 8.4: 0 failures, 0 errors, 0 skipped in each run. The suite also passed inside the official Java 17 Maven container. The Java 17 Docker image built and app/database containers reached healthy state. The Docker HTTP smoke completed customer login, booking 201, cancellation 200 and two delivered notification events.
+Validation on October 18, 2026 (America/Los_Angeles) passed all 52 tests on both H2 and MySQL 8.4. Each run had 0 failures, 0 errors and 0 skipped tests. The suite also passed in the official Java 17 Maven container. The Java 17 Docker image built successfully, and both app and database containers became healthy. The Docker HTTP smoke run completed customer login, booking with HTTP 201, cancellation with HTTP 200 and delivery of two notification events.
 
 | Test group | Count | Coverage |
 | --- | --- | --- |
@@ -151,9 +153,9 @@ Validation date: October 18, 2026 (America/Los_Angeles). The final 52-test suite
 | NotificationRecoveryTests | 5 | DB-down health, recovery, exception fallback, metrics |
 | NotificationDownTests | 1 | No notification server listening; booking still commits |
 
-NotificationDownTests points the gateway to an unopened local TCP port. It logs in over HTTP, books a slot, asserts HTTP 201, verifies one active database appointment, and verifies a PENDING event after three failed attempts. This is a real network failure rather than a mocked successful gateway call.
+NotificationDownTests directs the gateway to an unopened local TCP port. The test logs in over HTTP, books a slot and checks for HTTP 201. It then verifies one active appointment in the database and a PENDING event after three failed attempts. The connection failure occurs over the network; the test does not substitute a successful gateway result.
 
-Other integration tests use an HTTP stub that disconnects, delays its response, returns 503 or rejects with 400. The stub probes the appointment through a different database connection before acknowledging the request, demonstrating committed visibility. Recovery tests bring the stub back and verify stable payloads and PENDING-to-SENT transition. The receiver is separately tested with concurrent identical requests and stores one receipt.
+Other integration tests use an HTTP stub that disconnects, delays a response, returns 503 or rejects a request with 400. Before acknowledging a request, the stub reads the appointment through a separate database connection. That check establishes that the booking is already committed when notification begins. Recovery tests restore the stub and check that the payload stays the same as the event moves from PENDING to SENT. Separate receiver tests send identical requests concurrently and verify that only one receipt is stored.
 
 ```
 mvn test
@@ -164,11 +166,11 @@ sh scripts/test-mysql.sh \
   '-Dtest=Milestone3IntegrationTests'
 ```
 
-Independent read-only review found one recovery starvation issue: always selecting the oldest 20 rows could block newer events. The regression was observed failing, the query was changed to prioritize next_attempt_at, and review recheck found no remaining important defect. Hosted GitHub Actions results are separate from local verification and are not claimed before publishing the branch.
+An independent read-only review found that selecting the oldest 20 rows on every cycle could prevent newer events from being processed. A regression test reproduced the failure. The query now prioritizes next_attempt_at, and the review recheck found no remaining important defect. These local results are separate from hosted GitHub Actions results, which are not claimed before the branch is published.
 
-## 7. Source map, limits and references
+## 7 Source map limits and references
 
-### Files to explain in the walkthrough
+### Code for the walkthrough
 
 ```
 notification/NotificationRequest.java
@@ -186,15 +188,15 @@ Dockerfile / docker-compose.yml
 .github/workflows/verify.yml
 ```
 
-Java source paths are relative to src/main/java/com/example/tutorconnect. Tests are under src/test/java/com/example/tutorconnect. The Chinese run guide and English speech are in docs/milestone3. A real student-recorded code walkthrough of at least five minutes and its video link remain student deliverables.
+Java source paths above are relative to src/main/java/com/example/tutorconnect. Tests are in src/test/java/com/example/tutorconnect. The Chinese run guide and English speech are in docs/milestone3. The student must still record a code walkthrough of at least five minutes and submit its video link.
 
-### Practical limits
+### Implementation limits
 
-The mock stores notifications, not real email/SMS. Book/cancel event arrival order is not guaranteed across outages. Recovery is bounded per cycle but continues retrying transient failures across cycles; permanent failures require review. JVM counters reset on restart. The additive schema initializer assumes permission to create the two new tables. Existing schema versions with incompatible notification tables would need a formal migration beyond this first Milestone 3 schema.
+The mock stores notifications without sending real email or SMS. Booking and cancellation events may arrive out of order across outages. Each recovery cycle has bounded attempts, but transient failures continue to be retried in later cycles; permanent failures need operator review. JVM counters reset on restart. The schema initializer needs permission to create the two tables. An existing database with incompatible notification tables would require a formal migration beyond this first Milestone 3 schema.
 
 ### References
 
-Assignment: SJSU CMPE 172, Milestone 3 - Integration, Distribution & Deployment, supplied two-page PDF. Course General Rules were referenced by the assignment but were not included in that attachment.
+Assignment: SJSU CMPE 172, Milestone 3 - Integration, Distribution & Deployment, supplied two-page PDF. The assignment refers to Course General Rules, which were not included in the attachment.
 
 Spring Framework, Transaction-bound Events: https://docs.spring.io/spring-framework/reference/data-access/transaction/event.html (transaction phase semantics; this implementation uses an explicit proxy-return boundary).
 
