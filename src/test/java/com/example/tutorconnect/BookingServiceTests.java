@@ -23,7 +23,8 @@ class BookingServiceTests {
   void setup() {
     slots = mock(SlotRepository.class);
     appointments = mock(AppointmentRepository.class);
-    transaction = new BookingTransaction(slots, appointments);
+    transaction =
+        new BookingTransaction(slots, appointments, mock(NotificationOutboxRepository.class));
   }
 
   void slot() {
@@ -120,7 +121,13 @@ class BookingServiceTests {
   @Test
   void retriesTransientLockFailureButNotBusinessConflict() {
     var tx = mock(BookingTransaction.class);
-    var service = new AppointmentService(tx, appointments);
+    var service =
+        new AppointmentService(
+            tx,
+            appointments,
+            mock(com.example.tutorconnect.notification.NotificationDispatcher.class),
+            new com.example.tutorconnect.observability.BookingMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     when(tx.book(1, 1, 1)).thenThrow(new CannotAcquireLockException("busy")).thenReturn(7L);
     assertThat(service.book(1, 1, 1)).isEqualTo(7);
     verify(tx, times(2)).book(1, 1, 1);
@@ -133,7 +140,16 @@ class BookingServiceTests {
   void exhaustedRetryReturns503() {
     var tx = mock(BookingTransaction.class);
     when(tx.book(1, 1, 1)).thenThrow(new CannotAcquireLockException("busy"));
-    status(() -> new AppointmentService(tx, appointments).book(1, 1, 1), SERVICE_UNAVAILABLE);
+    status(
+        () ->
+            new AppointmentService(
+                    tx,
+                    appointments,
+                    mock(com.example.tutorconnect.notification.NotificationDispatcher.class),
+                    new com.example.tutorconnect.observability.BookingMetrics(
+                        new io.micrometer.core.instrument.simple.SimpleMeterRegistry()))
+                .book(1, 1, 1),
+        SERVICE_UNAVAILABLE);
     verify(tx, times(3)).book(1, 1, 1);
   }
 

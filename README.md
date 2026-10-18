@@ -1,17 +1,18 @@
-# TutorConnect — Milestone 2
+# TutorConnect — Milestone 3
 
 A tutoring appointment system built with Java 17+, Spring Boot 4.1.1, Spring Security, Thymeleaf, JDBC (`JdbcTemplate`) and MySQL. No ORM. Customers find and book sessions; tutors manage service-specific availability. Booking remains correct when two users request the same slot.
 
 ## Run with MySQL (recommended)
 
-Requirements: JDK 17+, Maven, Docker Compose.
+Requirements: Docker Desktop / Compose for the container run; JDK 17+ and Maven for host development and tests.
 
 ```sh
-docker compose up -d --wait
-mvn spring-boot:run
+docker compose up -d --build --wait
 ```
 
 Open http://localhost:8080. The database listens on local port 3307. Compose initializes the schema and demo data only when its persistent volume is first created; restarting the application does not delete bookings. `docker compose down` stops the database and preserves the volume.
+
+For host-based development, run `docker compose up -d --wait db` followed by `mvn spring-boot:run`. Do not run the host app and Compose app on the same HTTP port.
 
 For an existing MySQL server, create a **new empty** `tutorconnect` database, execute `src/main/resources/schema-mysql.sql`, optionally execute `seed.sql`, then supply `DB_URL`, `DB_USERNAME` and `DB_PASSWORD`. The Milestone 1 H2 schema is not a migration target: its old unconditional unique slot constraint must not be retained alongside the new active-slot constraint. Times are entered and displayed in UTC; the default JDBC URL sets the MySQL session to UTC.
 
@@ -108,3 +109,25 @@ The test profile resets its database. The script restricts the target database t
 ## Submission
 
 See `docs/milestone2-report.md`, the accompanying PDF report, and `docs/code-walkthrough.md`. Record your own code walkthrough of at least five minutes: explain the code, transactions, SQL, RBAC and tests, rather than only clicking through the app. Submit the report/source ZIP, GitHub repository link and your video link. Check course General Rules separately; they were not included in the provided Milestone 2 document.
+
+
+## Milestone 3 — integration and deployment
+
+See [Chinese run/recording guide](docs/milestone3/README_zh.md), [design](docs/milestone3/design.md), [report](docs/milestone3/report.md), [distribution diagram](docs/milestone3/distribution.png), [validation](docs/milestone3/validation.md), and [walkthrough speech](docs/milestone3/speech.md).
+
+The existing booking/cancellation transaction now also inserts a durable notification outbox event. After commit, a notification Gateway posts one coarse-grained DTO (`eventId`, `recipient`, `type`, `message`) to a mock second controller at `/internal/notifications`. The internal endpoint uses a shared service key and durable event-ID/payload deduplication; it sends no real messages. The ordinary browser Session, role restrictions and CSRF protections remain enabled.
+
+The Gateway bounds connection and complete-response time, makes up to three attempts using the same event ID, and falls back to persisted PENDING state without rolling back the booking. A recovery worker retries due events every 15 seconds in batches of 20, ordered by next attempt time. Non-retryable HTTP responses become FAILED for manual review. See the report for delivery guarantees and recovery limits.
+
+`GET /health` checks `SELECT 1`, returning 200/UP or 503/DOWN. `GET /api/provider/metrics` exposes Micrometer booking success/failure counts, cancellation and notification counts, average service booking latency, and durable queue counts. Metrics require a provider session. Logs use event/appointment IDs, types and failure categories; notification content, recipient addresses and service tokens are not logged by the new notification code.
+
+```sh
+# Dedicated MySQL database must be set up first (see Chinese guide).
+sh scripts/test-mysql.sh '-Dtest=NotificationDownTests'
+sh scripts/test-mysql.sh '-Dtest=Milestone3IntegrationTests'
+
+# End-to-end smoke against a fresh running demo app.
+python3 scripts/smoke.py --base-url http://localhost:8080
+```
+
+The multi-stage Dockerfile compiles on Java 17, runs as a non-root user and includes a Java health probe. `docker-compose.yml` now runs app + MySQL while preserving the prior Compose project and volume names. New notification tables are created additively at startup, including on existing volumes. GitHub Actions verifies H2/MySQL tests and builds/smokes the image on each push or pull request. A hosted CI run is separate from local validation and is not implied until this branch is published.

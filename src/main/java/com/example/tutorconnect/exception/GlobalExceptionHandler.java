@@ -26,6 +26,11 @@ public class GlobalExceptionHandler {
     return error(HttpStatus.METHOD_NOT_ALLOWED, "This request method is not supported.", r);
   }
 
+  @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+  Object malformed(Exception e, HttpServletRequest r) {
+    return error(HttpStatus.BAD_REQUEST, "Invalid request body.", r);
+  }
+
   @ExceptionHandler(AppException.class)
   Object application(AppException e, HttpServletRequest r) {
     return error(e.status(), e.getMessage(), r);

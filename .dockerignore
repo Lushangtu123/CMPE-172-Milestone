@@ -1,0 +1,9 @@
+.git
+.github
+target
+.idea
+*.log
+docs
+outputs
+work
+.planning

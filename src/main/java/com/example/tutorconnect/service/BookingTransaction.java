@@ -14,7 +14,13 @@ public class BookingTransaction {
   private final SlotRepository slots;
   private final AppointmentRepository appointments;
 
-  public BookingTransaction(SlotRepository slots, AppointmentRepository appointments) {
+  private final NotificationOutboxRepository notifications;
+
+  public BookingTransaction(
+      SlotRepository slots,
+      AppointmentRepository appointments,
+      NotificationOutboxRepository notifications) {
+    this.notifications = notifications;
     this.slots = slots;
     this.appointments = appointments;
   }
@@ -35,7 +41,9 @@ public class BookingTransaction {
     if (appointments.occupied(slotId))
       throw new AppException(CONFLICT, "This slot has just been booked. Please choose another.");
     try {
-      return appointments.insert(user, slotId);
+      long id = appointments.insert(user, slotId);
+      notifications.enqueue(user, id, "BOOKING_CONFIRMED");
+      return id;
     } catch (DuplicateKeyException e) {
       throw new AppException(CONFLICT, "This slot has just been booked. Please choose another.");
     }
@@ -59,5 +67,6 @@ public class BookingTransaction {
         || !current.startTime().isAfter(LocalDateTime.now(ZoneOffset.UTC)))
       throw new AppException(CONFLICT, "Only future booked appointments can be cancelled.");
     appointments.cancel(id);
+    notifications.enqueue(user, id, "CANCELLATION_CONFIRMED");
   }
 }

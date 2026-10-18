@@ -35,11 +35,19 @@ public class SecurityConfig {
   }
 
   @Bean
+  @org.springframework.core.annotation.Order(2)
   SecurityFilterChain security(HttpSecurity http) throws Exception {
     http.authorizeHttpRequests(
             a ->
                 a.requestMatchers(
-                        "/", "/login", "/slots", "/assets/**", "/api/home", "/api/slots", "/error")
+                        "/",
+                        "/login",
+                        "/slots",
+                        "/assets/**",
+                        "/api/home",
+                        "/api/slots",
+                        "/health",
+                        "/error")
                     .permitAll()
                     .requestMatchers("/customer/**", "/api/customer/**")
                     .hasRole("CUSTOMER")

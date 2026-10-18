@@ -1,4 +1,4 @@
-name: Verify booking system
+name: Verify booking, notifications and deployment
 on: [push, pull_request]
 permissions:
   contents: read
@@ -13,6 +13,21 @@ jobs:
           java-version: '17'
           cache: maven
       - run: mvn -B verify
+      - run: docker build -t tutorconnect:ci .
+      - name: Verify the application image
+        run: |
+          docker run -d --name tutorconnect-ci -e SPRING_PROFILES_ACTIVE=demo -p 8080:8080 tutorconnect:ci
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8080/health; then break; fi
+            sleep 1
+          done
+          python3 scripts/smoke.py
+      - name: Container diagnostics
+        if: failure()
+        run: docker logs tutorconnect-ci || true
+      - name: Clean up
+        if: always()
+        run: docker rm -f tutorconnect-ci || true
   mysql:
     runs-on: ubuntu-latest
     services:
@@ -26,7 +41,7 @@ jobs:
         ports:
           - 3307:3306
         options: >-
-          --health-cmd="mysqladmin ping --silent"
+          --health-cmd="MYSQL_PWD=root-demo-only mysqladmin ping -h 127.0.0.1 -u root --silent"
           --health-interval=5s --health-timeout=3s --health-retries=30
     env:
       TEST_DB_URL: jdbc:mysql://localhost:3307/tutorconnect_test?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true

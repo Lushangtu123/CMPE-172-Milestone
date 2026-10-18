@@ -1,0 +1,13 @@
+# Milestone 3 design
+
+Approved scope: notification distribution boundary, commit-then-notify, timeout/retry/fallback/idempotency, logging, DB health, metrics, Docker/Compose, CI, outage tests, report/diagram and walkthrough.
+
+The scheduler remains the existing Spring Boot/JDBC/Session-RBAC application. A second controller simulates a notification service at POST /internal/notifications. A coarse DTO carries eventId, recipient, type and message in one HTTP call. A separate stateless security chain requires a shared service key; browser CSRF protection remains enabled on all ordinary mutations.
+
+BookingTransaction inserts the appointment and notification_outbox row atomically. Cancellation updates status and enqueues its own stable event in the same transaction. AppointmentService's NOT_SUPPORTED methods suspend any caller transaction, invoke the independent transaction proxy, then dispatch after that transaction returns committed. HTTP never runs inside a DB transaction; the Gateway enforces that invariant. Failed business transactions leave no outbox events.
+
+The HTTP gateway uses a 200 ms connection timeout and a 300 ms complete-response deadline, up to 3 attempts, with 25 ms retry delays. The serialized payload and event ID remain identical across attempts. Network/timeout/408/429/5xx errors defer durable PENDING events; other non-success statuses become FAILED for manual review. Unexpected dispatch errors are logged without changing the committed booking response. Every 15 seconds a worker retries up to 20 due events. Delivery is at-least-once; the receiver deduplicates by a durable unique event ID and rejects changed payloads under an existing ID. The receiver stores the mock notification once; this is not a real email/SMS channel.
+
+Health: public GET /health probes SELECT 1 and returns UP/200 or DOWN/503 without connection details. Provider-only GET /api/provider/metrics exposes low-cardinality Micrometer booking success/failure counts, cancellation/delivery counts, average end-to-end service booking latency, and durable pending/failed queue counts. In-memory counters reset when the JVM restarts; the outbox/receipts persist in MySQL. No recipient, message, password or service key is logged.
+
+An additive IF NOT EXISTS notification-schema.sql initializes only new tables and supports existing Milestone 2 databases. App Dockerfile is multi-stage Java 17, non-root runtime, with a Java health probe. docker-compose.yml preserves the existing project/volume names and adds the app beside MySQL; the notification mock runs as the required second controller in the same JVM, but is accessed via HTTP. CI tests H2/MySQL and builds/smokes the runtime image. Verification uses a separate Compose project/data volume.

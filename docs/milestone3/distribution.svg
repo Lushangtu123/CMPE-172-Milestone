@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE svg
+  PUBLIC '-//W3C//DTD SVG 1.0//EN'
+  'http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd'>
+<svg width="1200" height="720" preserveAspectRatio="xMinYMin meet" viewBox="0 0 1200 720" xmlns="http://www.w3.org/2000/svg" version="1.0" fill-rule="evenodd" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<title>...</title>
+	<desc>...</desc>
+	<clipPath id="clip">
+		<rect x="0" y="0" width="1200" height="720"/>
+	</clipPath>
+	<g id="group" transform="scale(1,-1) translate(0,-720)" style="clip-path: url(#clip)">
+		<g transform="">
+			<rect x="0" y="0" width="1200" height="720" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(96%,96%,93%); fill-rule: evenodd;"/>
+			<text x="48" y="672" style="font-family: Times-Bold; font-size: 32px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1344) scale(1,-1)">TutorConnect - Milestone 3</text>
+			<text x="48" y="640" style="font-family: Helvetica; font-size: 20px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,1280) scale(1,-1)">Commit first, notify afterwards.</text>
+			<rect x="304" y="356" width="880" height="256" rx="8" ry="8" style="stroke: rgb(76%,81%,75%); stroke-linecap: butt; stroke-width: 1.2; fill: none; fill-rule: evenodd; stroke-dasharray: 8, 4;"/>
+			<text x="328" y="584" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1168) scale(1,-1)">App container: two Spring controllers, connected through HTTP</text>
+			<polyline points="240 488, 344 488" style="stroke: rgb(13%,30%,25%); stroke-linecap: butt; stroke-width: 2; fill: None; fill-rule: evenodd;"/>
+			<polygon points="344 488, 332 482, 332 494" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(13%,30%,25%); fill-rule: evenodd;"/>
+			<text x="248" y="512" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1024) scale(1,-1)">HTTP</text>
+			<polyline points="648 488, 840 488" style="stroke: rgb(13%,30%,25%); stroke-linecap: butt; stroke-width: 2; fill: None; fill-rule: evenodd;"/>
+			<polygon points="840 488, 828 482, 828 494" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(13%,30%,25%); fill-rule: evenodd;"/>
+			<text x="680" y="528" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1056) scale(1,-1)">JSON DTO + key</text>
+			<text x="680" y="504" style="font-family: Helvetica-Bold; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1008) scale(1,-1)">after DB commit</text>
+			<polyline points="496 420, 496 324, 548 324, 548 288" style="stroke: rgb(13%,30%,25%); stroke-linecap: butt; stroke-width: 2; fill: None; fill-rule: evenodd;"/>
+			<polygon points="548 288, 542 300, 554 300" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(13%,30%,25%); fill-rule: evenodd;"/>
+			<text x="328" y="332" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,664) scale(1,-1)">JDBC + atomic commit</text>
+			<polyline points="992 420, 992 244, 880 244" style="stroke: rgb(13%,30%,25%); stroke-linecap: butt; stroke-width: 2; fill: None; fill-rule: evenodd;"/>
+			<polygon points="880 244, 892 238, 892 250" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(13%,30%,25%); fill-rule: evenodd;"/>
+			<text x="1008" y="316" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,632) scale(1,-1)">JDBC</text>
+			<text x="1008" y="292" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,584) scale(1,-1)">deduplicate</text>
+			<rect x="40" y="420" width="200" height="136" rx="8" ry="8" style="stroke: rgb(76%,81%,75%); stroke-linecap: butt; stroke-width: 1.2; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<text x="60" y="520" style="font-family: Helvetica-Bold; font-size: 24px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1040) scale(1,-1)">Client</text>
+			<text x="60" y="488" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,976) scale(1,-1)">Browser or API</text>
+			<text x="60" y="464" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,928) scale(1,-1)">Session + CSRF</text>
+			<rect x="344" y="420" width="304" height="136" rx="8" ry="8" style="stroke: rgb(76%,81%,75%); stroke-linecap: butt; stroke-width: 1.2; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<text x="364" y="520" style="font-family: Helvetica-Bold; font-size: 24px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1040) scale(1,-1)">Appointment Scheduler</text>
+			<text x="364" y="488" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,976) scale(1,-1)">1. booking + outbox commit</text>
+			<text x="364" y="464" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,928) scale(1,-1)">2. Gateway sends DTO</text>
+			<rect x="840" y="420" width="304" height="136" rx="8" ry="8" style="stroke: rgb(76%,81%,75%); stroke-linecap: butt; stroke-width: 1.2; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<text x="860" y="520" style="font-family: Helvetica-Bold; font-size: 24px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,1040) scale(1,-1)">Notification Service</text>
+			<text x="860" y="488" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,976) scale(1,-1)">Mock controller, no email</text>
+			<text x="860" y="464" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,928) scale(1,-1)">Unique eventId + payload hash</text>
+			<rect x="448" y="160" width="432" height="128" rx="8" ry="8" style="stroke: rgb(76%,81%,75%); stroke-linecap: butt; stroke-width: 1.2; fill: rgb(100%,100%,100%); fill-rule: evenodd;"/>
+			<text x="468" y="252" style="font-family: Helvetica-Bold; font-size: 24px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,504) scale(1,-1)">MySQL - persistent volume</text>
+			<text x="468" y="220" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,440) scale(1,-1)">Appointments + notification outbox</text>
+			<text x="468" y="196" style="font-family: Helvetica; font-size: 16px;fill: rgb(38%,45%,41%); stroke:none;" transform="translate(0,392) scale(1,-1)">Mock notification receipts</text>
+			<rect x="48" y="44" width="1104" height="76" rx="8" ry="8" style="stroke: none; stroke-linecap: butt; stroke-width: 1; fill: rgb(89%,92%,81%); fill-rule: evenodd;"/>
+			<text x="68" y="92" style="font-family: Helvetica-Bold; font-size: 12px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,184) scale(1,-1)">BOUND THE CALL</text>
+			<text x="68" y="64" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,128) scale(1,-1)">300 ms deadline / up to 3 attempts</text>
+			<text x="452" y="92" style="font-family: Helvetica-Bold; font-size: 12px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,184) scale(1,-1)">RECOVER DURABLY</text>
+			<text x="452" y="64" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,128) scale(1,-1)">PENDING / 15 s cycles / fair batches</text>
+			<text x="840" y="92" style="font-family: Helvetica-Bold; font-size: 12px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,184) scale(1,-1)">DEDUPLICATE</text>
+			<text x="840" y="64" style="font-family: Helvetica; font-size: 16px;fill: rgb(9%,23%,20%); stroke:none;" transform="translate(0,128) scale(1,-1)">One stored receipt per event ID</text>
+		</g>
+	</g>
+</svg>

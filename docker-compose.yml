@@ -1,5 +1,19 @@
 name: tutorconnect-milestone2
 services:
+  app:
+    build: .
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    environment:
+      DB_URL: jdbc:mysql://db:3306/tutorconnect?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true
+      DB_USERNAME: tutorconnect
+      DB_PASSWORD: tutorconnect-demo
+      NOTIFICATION_URL: http://127.0.0.1:8080/internal/notifications
+      NOTIFICATION_SERVICE_TOKEN: ${NOTIFICATION_SERVICE_TOKEN:-tutorconnect-local-notification-key}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
   db:
     image: mysql:8.4
     ports:
@@ -16,7 +30,7 @@ services:
       - ./src/main/resources/schema-mysql.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./src/main/resources/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test: ["CMD-SHELL", "MYSQL_PWD=$$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -u root --silent"]
       interval: 5s
       timeout: 3s
       retries: 30
