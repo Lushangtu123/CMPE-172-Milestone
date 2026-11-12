@@ -33,6 +33,12 @@ public class NotificationDispatcher {
     try {
       var request = outbox.pending(eventId);
       if (request.isEmpty()) return;
+      if (request.get().type().equals("APPOINTMENT_REMINDER")
+          && !outbox.reminderStillUpcoming(eventId)) {
+        outbox.failed(eventId, 0, "NOT_UPCOMING", true);
+        log.info("notification_suppressed eventId={} reason=NOT_UPCOMING", eventId);
+        return;
+      }
       var result = gateway.send(request.get());
       if (result.delivered()) {
         if (outbox.delivered(eventId, result.attempts()) == 1) {

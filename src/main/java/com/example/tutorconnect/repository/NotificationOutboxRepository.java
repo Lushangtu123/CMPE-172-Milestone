@@ -18,10 +18,10 @@ public class NotificationOutboxRepository {
     NotificationRequest request =
         jdbc.queryForObject(
             """
-            SELECT u.email,sv.name,s.start_time FROM appointments a JOIN users u ON u.user_id=a.user_id
-            JOIN availability_slots s ON s.slot_id=a.slot_id JOIN services sv ON sv.service_id=s.service_id
-            WHERE a.appointment_id=? AND a.user_id=?
-            """,
+SELECT u.email,sv.name,s.start_time FROM appointments a JOIN users u ON u.user_id=a.user_id
+JOIN availability_slots s ON s.slot_id=a.slot_id JOIN services sv ON sv.service_id=s.service_id
+WHERE a.appointment_id=? AND a.user_id=?
+""",
             (rs, n) ->
                 new NotificationRequest(
                     "appointment:" + appointment + ":" + type,
@@ -62,6 +62,17 @@ public class NotificationOutboxRepository {
             id)
         .stream()
         .findFirst();
+  }
+
+  public boolean reminderStillUpcoming(String eventId) {
+    return jdbc.queryForObject(
+            "SELECT COUNT(*) FROM appointments a JOIN availability_slots s ON s.slot_id=a.slot_id"
+                + " WHERE CONCAT('appointment:',a.appointment_id,':APPOINTMENT_REMINDER')=?"
+                + " AND a.status='BOOKED' AND s.start_time>?",
+            Integer.class,
+            eventId,
+            LocalDateTime.now(ZoneOffset.UTC))
+        > 0;
   }
 
   public List<String> due() {

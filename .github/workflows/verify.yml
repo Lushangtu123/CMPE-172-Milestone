@@ -1,4 +1,4 @@
-name: Verify booking, notifications and deployment
+name: Verify booking, AI tools, notifications and deployment
 on: [push, pull_request]
 permissions:
   contents: read

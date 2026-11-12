@@ -12,7 +12,8 @@ public record NotificationRequest(String eventId, String recipient, String type,
         || recipient.isBlank()
         || recipient.length() > 255
         || type == null
-        || !java.util.Set.of("BOOKING_CONFIRMED", "CANCELLATION_CONFIRMED").contains(type)
+        || !java.util.Set.of("BOOKING_CONFIRMED", "CANCELLATION_CONFIRMED", "APPOINTMENT_REMINDER")
+            .contains(type)
         || message == null
         || message.isBlank()
         || message.length() > 1000)

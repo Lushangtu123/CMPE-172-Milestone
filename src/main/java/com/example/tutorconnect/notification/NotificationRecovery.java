@@ -6,7 +6,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.*;
 
 @Configuration
-@EnableScheduling
 @ConditionalOnProperty(
     name = {"notifications.enabled", "notifications.recovery.enabled"},
     havingValue = "true",

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TutorConnect Assistant</title><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/assistant.css"><script src="/assets/assistant.js" defer></script></head>
+<body><header th:replace="~{fragments :: nav}"></header><main>
+<section class="page-heading"><div><p class="eyebrow">YOUR STUDY PLANS</p><h1>Tutoring <em>assistant.</em></h1><p>Find a session, manage your appointments, or ask about our policies. All times are UTC.</p></div></section>
+<section class="assistant-layout"><div>
+<div id="conversation" class="conversation" role="log" aria-live="polite" aria-label="Conversation"><p class="muted">Try “Find the earliest algebra session this week” or “What is the cancellation policy?”</p></div>
+<p id="agent-error" class="error" role="alert"></p>
+<section id="proposal" class="proposal" hidden><h2>Review before confirming</h2><p id="proposal-summary"></p><p class="muted">Nothing changes until you confirm. This proposal expires after 5 minutes.</p><button id="confirm" class="button" type="button">Confirm this action</button> <button id="discard" type="button">Discard</button></section>
+<form id="chat-form" th:action="@{/api/customer/ai/chat}" method="post"><label for="message">Your message</label><textarea id="message" name="message" rows="3" maxlength="2000" required placeholder="What would you like to plan?"></textarea><div class="assistant-actions"><button class="button" id="send">Send message</button><button id="reset" type="button">Clear conversation</button></div></form>
+</div><aside><h2>You stay in control</h2><p>The assistant checks live availability. Review the exact subject, tutor and UTC time in the confirmation summary.</p><p>Another customer may take a session before you confirm. If that happens, ask for alternatives.</p><p>Policy answers use TutorConnect’s demo FAQ. Your conversation stays in this login session.</p><a href="/customer/appointments">View my appointments</a></aside></section>
+</main></body></html>

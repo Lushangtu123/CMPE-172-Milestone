@@ -131,3 +131,18 @@ python3 scripts/smoke.py --base-url http://localhost:8080
 ```
 
 The multi-stage Dockerfile compiles on Java 17, runs as a non-root user and includes a Java health probe. `docker-compose.yml` now runs app + MySQL while preserving the prior Compose project and volume names. New notification tables are created additively at startup, including on existing volumes. GitHub Actions verifies H2/MySQL tests and builds/smokes the image on each push or pull request. A hosted CI run is separate from local validation and is not implied until this branch is published.
+
+## Milestone 4 Enterprise AI
+
+Spring AI adds a customer assistant at `/customer/assistant`, server-enforced confirmation,
+vector-grounded policy answers, and scheduled personalized reminders through the existing
+notification outbox. Providers can run their reminder agent from the dashboard.
+
+The original app works with AI disabled. To enable real Gemini calls, copy `.env.example`
+to `.env`, set your Google AI Studio key locally, then run `docker compose up -d --build --wait`.
+Never commit `.env` or put a key in a report, screenshot or video. Model names can be overridden
+with `GEMINI_CHAT_MODEL` and `GEMINI_EMBEDDING_MODEL`.
+
+See [the Milestone 4 run guide](docs/milestone4/README_zh.md) for setup, test commands,
+manual-trigger behavior and the recording checklist. A missing key yields HTTP503 from AI
+operations while ordinary booking and health endpoints remain available.
