@@ -19,9 +19,13 @@ Validation date: November11,2026 (America/Los_Angeles).
 
 ## Live model verification
 
-No Gemini API key was provided to this execution environment. No successful live Google model call is claimed. The user will configure their own key locally. Use scripts/ai-live-smoke.py for a real policy response, and record customer tool use plus autonomous reminders with the configured key before submission.
+The user configured a key in a local ignored .env. With gemini-3.1-flash-lite, live app chat returnedHTTP200 in0.84seconds. The live policy smoke returned a cancellation answer citing policy-cancellation through the real vector retrieval path. The key was not printed, committed or added to any artifact. Live confirmation writes and scheduled outbound reminders still need a separate demonstration; their automated integration tests pass.
+
+The original gemini-3.8-flash request timed out with this account while listing models succeeded. Switching only the local model configuration restored service. Two Node regression tests reproduce missing progress feedback and unbounded browser waiting; the fixed UI shows progress, aborts after45seconds and does not wait on history potentially locked by the still-running server request.
 
 ## Submission
 
 Mandatory PDF and editable Wordreport share the same five-page content. Include source, knowledgefile and tests in the ZIP. Record a minimumfive-minute codewalkthrough and submit its link alongside the ZIP and GitHubrepository link. HostedCI results require publication of this branch and are separate from localvalidation.
 - Browser check: Playwright logged in with the demo customer, rendered the assistant, submitted a policy question with AI disabled and verified the configuration alert with no pending confirmation. Browser session closed afterward. An unrelated favicon404 was the only initial asset error.
+
+- Frontend regressions: `node --test scripts/tests/assistant.test.cjs`,2passed. Existing81Java tests remain required.

@@ -12,6 +12,7 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: maven
+      - run: node --test scripts/tests/assistant.test.cjs
       - run: mvn -B verify
       - run: docker build -t tutorconnect:ci .
       - name: Verify the application image

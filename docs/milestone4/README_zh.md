@@ -96,6 +96,12 @@ python3 scripts/ai-live-smoke.py --confirm-writes
 
 该脚本先读取真实 AI 提案，再通过确认接口提交，并用原服务接口取消预约以清理。AI 取消提案与确认仍建议在页面录制。没有 Key 时脚本不会伪造通过结果。
 
+## 发送消息长时间无响应
+
+先查看 `docker compose logs --tail=100 app`。API Key 有效也不保证每个模型在当前账户下都能及时响应。本机验证中 gemini-3.8-flash 生成请求超时，同一 Key 的 gemini-3.1-flash-lite 正常返回。遇到这种情况，可在本机 .env 设置 GEMINI_CHAT_MODEL=gemini-3.1-flash-lite，然后执行 `docker compose up -d --no-deps --wait app` 重新创建应用容器。模型选择仍须以账户实际可用性为准。
+
+页面发送时显示 Thinking 和等待提示；单次聊天等待45秒后会停止等待并恢复按钮。这个浏览器超时不会终止服务器上已经执行中的模型请求，稍后重试即可。确认写入请求若超时，请先查看 My appointments，避免把未收到响应误当成未提交。
+
 ## 6 录屏与提交
 
 录制至少5分钟的本人屏幕及讲解，重点解释 AiModelConfiguration、AiChatService、AiBookingTools、确认事务路径、AiReminderService、ReminderTransaction 和 AiKnowledgeService，并展示相应测试。完整 Maven 测试可提前运行，录制通过摘要。
