@@ -10,7 +10,7 @@ TutorConnect now has a conversational scheduling assistant, an autonomous remind
 
 The conversational agent can query available sessions, list the customer's appointments and propose a booking or cancellation. A separate confirmation request performs the write. The reminder agent runs on a schedule, asks Gemini to generate a study reminder and sends the result through the notification service built in Milestone 3.
 
-Spring AI 2.0.2 is pinned alongside Spring Boot 4.1.1 and Java 17. AiModelConfiguration creates the Google GenAI client with an external API key and vertexAI(false). No project ID or location is configured. The chat model defaults to gemini-3.8-flash; the text embedding model is gemini-embedding-001. Environment variables allow either model to be changed when account access or the model catalog changes.
+Spring AI 2.0.2 is pinned alongside Spring Boot 4.1.1 and Java 17. AiModelConfiguration creates the Google GenAI client with an external API key and vertexAI(false). No project ID or location is configured. The repository default is gemini-3.8-flash, and the local deployment uses gemini-3.1-flash-lite because it completed requests with this account. The embedding model is gemini-embedding-001. Environment variables allow both model names to be changed.
 
 ## 2 Conversational agent and tools
 
@@ -33,13 +33,19 @@ var tools = new AiBookingTools(
 client.prompt().messages(history).tools(tools).call();
 ```
 
-The HTTP session keeps up to 20 user and assistant messages for follow-up questions. It accepts no client-supplied history. A turn allows at most eight model rounds and ten tool executions. The assistant is instructed to clarify ambiguous dates or subjects and answer in the user's language. These language behaviors depend on the model; the server enforces identity and write protection independently.
+The HTTP session keeps up to 20 messages as model context for follow-up questions. A turn allows at most eight model rounds and ten tool executions. The assistant is instructed to clarify ambiguous dates or subjects and answer in the user's language. The server independently enforces identity and write protection.
+
+Persistent conversation history is the advanced feature for this milestone. AiChatHistory saves each successful exchange in ai_chat_threads and ai_chat_messages through a JDBC transaction. Both tables use InnoDB. The authenticated customer's ID scopes history lists and transcript reads. History survives New chat and another login, while saved transcripts remain read-only. Pending action tokens stay in the HTTP session and are excluded from the saved messages.
+
+The interface shows recent conversations in a desktop sidebar and opens transcripts in a history panel. Reading a transcript preserves the current chat and draft. Drafts use an account-specific key in sessionStorage. The message region scrolls independently, keeping the composer and action confirmation available during long conversations.
+
+A live request exposed a date-format error in checkAvailability. Its date parameters now specify yyyy-MM-dd. If a generated date cannot be parsed, the tool loop returns a correction instruction to Gemini so it can retry within the existing round limit.
 
 ## 3 Confirmation and the transactional write path
 
 A booking tool call does not insert an appointment. It produces a pending action containing the exact slot, service, summary and a random token. The pending action belongs to one customer session, expires after five minutes and is replaced when a new chat turn begins. Only the browser receives its token; the tool result sent back to Gemini contains the summary and confirmation requirement.
 
-The customer reviews the summary and clicks Confirm this action. That sends a CSRF-protected POST to /api/customer/ai/confirm. The endpoint reads the stored action and compares the token, identity and expiry. It accepts no replacement slot or service fields. Saying yes in chat cannot authorize a write.
+The customer reviews the course, tutor and formatted UTC time, then clicks Confirm booking or Confirm cancellation. That sends a CSRF-protected POST to /api/customer/ai/confirm. The endpoint reads the stored action and compares the token, identity and expiry. It accepts no replacement slot or service fields. Saying yes in chat cannot authorize a write.
 
 ```
 var pending = state.pending;
@@ -53,7 +59,7 @@ The confirmed booking calls the existing AppointmentService and its separate Boo
 
 Cancellation follows the same confirmation mechanism and calls AppointmentService.cancel. Ownership and future BOOKED status are checked again in the transactional service. Consuming the token prevents duplicate writes after a repeated request. If a conflict occurs or the proposal expires, the customer must request a new proposal. Session state and confirmations are synchronized within the current application instance.
 
-Both customer routes retain CUSTOMER role checks and browser CSRF protection. A provider cannot use the customer assistant, and another login session cannot confirm a copied token. Clear conversation and Discard also remove pending actions.
+Both customer routes retain CUSTOMER role checks and browser CSRF protection. A provider cannot use the customer assistant, and another login session cannot confirm a copied token. New chat and Discard clear pending actions. New chat starts a fresh model context and preserves saved transcripts.
 
 ## 4 Autonomous reminder agent
 
@@ -97,22 +103,30 @@ Retrieval grounds the prompt but does not guarantee that every generated sentenc
 
 ## 6 Validation and configuration
 
-On November 11, 2026, the full suite passed on Java 17 with both H2 and MySQL 8.4. Each run had 81 tests, zero failures, zero errors and zero skipped tests. The Java 17 application image also built successfully. The source retains the GitHub Actions workflow that builds and tests on push; hosted results are separate from these local runs.
+The final local validation on November 11, 2026 passed 89 Java tests on Java 17 with H2 and 89 with MySQL 8.4. Both runs had zero failures, errors or skipped tests. Four JavaScript regression tests also passed. The application image built successfully and the deployed app and database passed their health checks.
 
 | Test group | Count | Evidence |
 | --- | --- | --- |
-| Existing Milestone 2 and 3 suites | 52 | Booking, role checks, locking, rollback and notification recovery |
-| AiWorkflowTests | 13 | Real Spring AI tool loop, proposals, explicit confirmation, two-customer race, ownership, CSRF, RAG and reminder trigger |
-| AiFailureTests and AiDisabledTests | 4 | Safe model errors, bounded loops, no fabricated reminders and app availability without a key |
-| AiConfirmationTests | 4 | Expiry, identity, role checks and bounded session history |
-| AiReminderDeliveryTests | 4 | HTTP delivery, one event per appointment, cancellation rechecks and provider scope |
-| AiSchedulingTests | 2 | Scheduling independent of notification recovery and two scheduler threads |
-| GeminiAdapterTests | 2 | Actual Google SDK with local HTTP responses, signed tool round trip and filtering thought parts |
+| Booking and application integration suites | 57 | Role checks, locking, rollback, notifications, cancellation review, provider form recovery and page states |
+| AiWorkflowTests | 16 | Spring AI tool loop, explicit confirmation, concurrent booking, private saved history, RAG, reminder trigger and invalid-date recovery |
+| AiFailureTests and AiDisabledTests | 4 | Model errors, bounded loops, reminder failure and disabled AI behavior |
+| AiConfirmationTests | 4 | Token expiry, identity, role checks and bounded model context |
+| AiReminderDeliveryTests | 4 | Reminder delivery, deduplication, cancellation checks and provider scope |
+| AiSchedulingTests | 2 | Scheduling independent of notification recovery and scheduler thread capacity |
+| GeminiAdapterTests | 2 | Google SDK response handling, signed tool calls and filtering thought summaries |
 
-The concurrency test uses two independently authenticated HTTP clients. Both obtain a proposal for the same slot, wait at readiness/start latches and confirm through futures. It asserts one 200 response, one 409 response and exactly one active database appointment. The winning write also follows the existing notification outbox path.
+The agent concurrency test uses two independently authenticated clients. Each obtains a proposal for the same slot. Readiness and start latches release both confirmation requests through separate futures. The test asserts one HTTP 200 response, one HTTP 409 response and exactly one active database appointment. The winning write follows the notification outbox path.
 
-GeminiAdapterTests found and reproduced a Spring AI 2.0.2 response issue: thought summaries can appear before public answer parts. GeminiPublicAnswerModel removes those summaries, preserves tool-call signature metadata and combines public answer parts. The regression test checks both the complete answer and a signed function-call exchange.
+The saved-history test starts a new chat, signs out and signs back in, then reads the earlier transcript. Another customer receives 404 for that transcript and a provider receives 403. The test also verifies multi-turn appends and a saved confirmation message. Provider form tests cover duration and overlap errors, including preservation of valid input when another time field cannot be parsed.
 
-External model responses are controlled in repeatable tests. The actual Google SDK adapter is tested against a local HTTP server, which verifies the integration format without contacting Google. A later live check with the student's local key and gemini-3.1-flash-lite returned a chat response in 0.84 seconds and a policy answer citing policy-cancellation through real vector retrieval. The original gemini-3.8-flash request timed out for this account. Live confirmation writes and personalized outbound reminders still require a separate demonstration. The browser now shows progress and stops waiting after 45 seconds; two frontend regression tests verify this behavior.
+Four JavaScript tests cover the immediate user-message preview, replacement after a successful reply, confirmation rendering without an extra history request, and timeout recovery with the original draft retained. Browser checks covered portrait widths of 320 and 390 pixels, a 1366 by 768 desktop viewport, and short landscape viewports. Long conversations retained visible confirmation and send buttons. History panels preserved drafts and restored keyboard focus. Provider errors remained on the dashboard, and the selected course determined the UTC end time.
 
-AI_ENABLED enables the model configuration and GEMINI_API_KEY supplies the Google AI Studio key. The key is read at runtime; .env is excluded from Git and the Docker build context. With AI disabled, the original appointment app remains usable and AI operations return 503 with a configuration message. The run guide includes live verification commands. The student-recorded walkthrough must explain the core implementation for at least five minutes.
+Repeatable AI tests supply scripted model responses while exercising the real ChatClient tool loop, HTTP sessions, services and database. GeminiAdapterTests use the actual Google SDK against a local HTTP server. GeminiPublicAnswerModel filters thought summaries, preserves tool-call signatures and combines public answer parts.
+
+Live checks with the locally configured Gemini key returned readable appointment details and a policy answer citing policy-cancellation through vector retrieval. After the date recovery fix, the same Find my next session request completed successfully and reported no algebra sessions in the following seven days. A database query confirmed that result. Live confirmed writes and personalized outbound reminders still require the student's recorded demonstration. Their automated integration tests pass.
+
+AI_ENABLED enables the model configuration and GEMINI_API_KEY supplies the Google AI Studio key. The key is read at runtime from the local environment. The repository and Docker build exclude .env. The browser shows progress and stops waiting after 45 seconds. If a confirmation request times out, the customer should check My appointments before retrying.
+
+The implementation is published in the project's main branch at commit de9d0e8. These results describe local validation. The recorded walkthrough should explain the core code and tests for at least five minutes.
+
+Repository https://github.com/Lushangtu123/CMPE-172-Milestone

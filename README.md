@@ -1,16 +1,54 @@
-# TutorConnect — Milestone 3
+# TutorConnect Milestone 4
 
-A tutoring appointment system built with Java 17+, Spring Boot 4.1.1, Spring Security, Thymeleaf, JDBC (`JdbcTemplate`) and MySQL. No ORM. Customers find and book sessions; tutors manage service-specific availability. Booking remains correct when two users request the same slot.
+TutorConnect is a tutoring appointment system with a Gemini-powered scheduling assistant, policy Q&A and scheduled study reminders. It uses Java 17, Spring Boot 4.1.1, Spring AI 2.0.2, Spring Security, Thymeleaf and MySQL. Database access uses parameterized SQL through JdbcTemplate.
+
+Customers find sessions and manage their appointments. Providers manage availability and upcoming appointments. Both normal and AI-confirmed bookings use the same transactional service to prevent double-booking.
+
+[PDF report](docs/milestone4/report.pdf) · [Editable Word report](docs/milestone4/report.docx) · [中文运行与录屏指南](docs/milestone4/README_zh.md) · [Validation evidence](docs/milestone4/validation.md)
+
+## Milestone 4 features
+
+- **Conversational agent.** Spring AI ChatClient calls service-backed tools to check availability, list the customer's appointments and propose bookings or cancellations. The assistant can use several tools in one turn.
+- **Explicit confirmation.** The customer reviews the course, tutor and UTC time, then clicks Confirm booking or Confirm cancellation. The server checks the session-bound token, role, ownership and expiry before calling the transactional service.
+- **Autonomous reminders.** A scheduled agent scans upcoming appointments, asks Gemini for a personalized reminder and queues it through the notification outbox. Providers can manually run their own reminder scan from the dashboard.
+- **Grounded policy answers.** Policy and FAQ passages are embedded with Gemini and retrieved through Spring AI SimpleVectorStore. Answers cite source IDs from the knowledge file.
+- **Persistent chat history.** Successful conversations are stored in MySQL and remain available after New chat or another login. Customers can read their own transcripts through Chat history. Recent chats appear in the desktop sidebar, with a history panel on mobile.
+- **Responsive workflows.** Long conversations scroll independently while the composer and confirmation stay visible. History preserves the draft. Provider availability forms calculate the end time from the service duration and keep submitted values beside inline errors.
+
+The model context keeps the latest 20 messages in the login session. Pending actions also belong to that session and expire after five minutes. Saved transcripts contain messages and confirmation results. Each chat turn is bounded to eight model rounds and ten tool calls.
 
 ## Run with MySQL (recommended)
 
 Requirements: Docker Desktop / Compose for the container run; JDK 17+ and Maven for host development and tests.
 
+To enable real Gemini responses, create a local environment file on the first run.
+
 ```sh
-docker compose up -d --build --wait
+test -f .env || cp .env.example .env
 ```
 
-Open http://localhost:8080. The database listens on local port 3307. Compose initializes the schema and demo data only when its persistent volume is first created; restarting the application does not delete bookings. `docker compose down` stops the database and preserves the volume.
+Open `.env` in an editor, set your Google AI Studio key, and configure the model.
+
+```dotenv
+AI_ENABLED=true
+GEMINI_API_KEY=<your Google AI Studio key>
+GEMINI_CHAT_MODEL=gemini-3.1-flash-lite
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+AI_REMINDERS_ENABLED=true
+```
+
+The local deployment was verified with `gemini-3.1-flash-lite`. The checked-in example defaults to `gemini-3.8-flash`, which timed out for this account. Choose a model available to your account. The Gemini client uses the Developer API with `vertexAI(false)`. Configure the API key through the environment.
+
+Start the application and database.
+
+```sh
+docker compose up -d --build --wait
+curl --fail http://localhost:8080/health
+```
+
+The repository and Docker build exclude `.env`. Set `AI_ENABLED=false` to use the ordinary booking features without a Gemini key.
+
+Open [TutorConnect](http://localhost:8080). The database listens on local port 3307. Compose initializes the schema and demo data only when its persistent volume is first created; restarting the application does not delete bookings. `docker compose down` stops the database and preserves the volume.
 
 For host-based development, run `docker compose up -d --wait db` followed by `mvn spring-boot:run`. Do not run the host app and Compose app on the same HTTP port.
 
@@ -31,7 +69,9 @@ This uses disposable in-memory H2 data. It is convenient for viewing the app; th
 | Provider | priya.shah@example.com | TutorDemo123! |
 | Provider | jordan.lee@example.com | TutorDemo123! |
 
-Demo credentials are public local-development examples. The database contains BCrypt hashes, never plaintext passwords.
+Demo credentials are public local-development examples. The database stores BCrypt password hashes.
+
+Existing database volumes retain their original availability dates. If the next seven days have no available sessions, sign in as a provider and add a future slot before demonstrating an AI booking. All dates and times in the app use UTC.
 
 ## Web interface
 
@@ -40,8 +80,10 @@ Demo credentials are public local-development examples. The database contains BC
 - `/slots`: available future slots, provider/service/date filters and pagination.
 - `/customer/book/{slotId}`: booking form; POST confirms the appointment.
 - `/customer/confirmation/{appointmentId}`: owner-only confirmation.
-- `/customer/appointments`: upcoming sessions, history and owner-only cancellation.
-- `/provider/dashboard`: create/remove own availability and view booked sessions.
+- `/customer/appointments`: upcoming sessions, history and owner-only cancellation review.
+- `/customer/assistant`: scheduling chat, structured confirmation and recent conversations.
+- `/customer/assistant/history`: owner-only saved conversations and read-only transcripts.
+- `/provider/dashboard`: provider login destination, upcoming appointments, availability, removal review and AI reminder tools.
 
 Slots belong to services. A tutor's overlapping slots are rejected even across different services, and slot length must equal service duration. Removing an unbooked slot deactivates it, preserving foreign keys and cancellation history. Slots with BOOKED/COMPLETED appointments cannot be removed. Past booked appointments become COMPLETED when their appointment list is viewed; this is deliberately lazy rather than a background scheduler.
 
@@ -68,6 +110,23 @@ Controllers receive requests. Services enforce business rules and transactions. 
 
 API clients must log in using the session cookie and send a CSRF token (`X-CSRF-TOKEN`) for all POSTs. The HTML forms include the token automatically. Missing authentication returns 401 for APIs and a login redirect for pages. Wrong role/owner or invalid CSRF returns 403. Invalid input returns 400, missing records 404, occupied/overlapping slots 409, and exhausted transient lock retries 503. Client error responses never contain stack traces.
 
+## AI endpoints and knowledge source
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| POST | `/api/customer/ai/chat` | Submit a message and run the tool loop |
+| GET | `/api/customer/ai/history` | Read the current session context and pending action |
+| POST | `/api/customer/ai/confirm` | Confirm the pending server-owned action using its token |
+| POST | `/api/customer/ai/discard` | Discard the pending action |
+| POST | `/api/customer/ai/reset` | Start a new session conversation while retaining saved transcripts |
+| POST | `/api/provider/ai/reminders/run` | Run a reminder scan for the authenticated provider |
+
+Customer and provider routes enforce their respective roles. POST requests require the session cookie and CSRF token.
+
+The knowledge file is [tutorconnect-policies.md](src/main/resources/knowledge/tutorconnect-policies.md). AiKnowledgeService splits it into passages, creates Gemini embeddings and retrieves up to three matches from SimpleVectorStore. The vector index is rebuilt on demand after an app restart.
+
+The reminder scheduler runs every 60 seconds and considers appointments in the next 24 hours. For a reminder demonstration, create and book a slot about two hours ahead, then open **Tools and history → AI study reminders** on the provider dashboard. The outbound action uses the existing mock notification receiver and durable outbox.
+
 ## Transaction and concurrency design
 
 Two customers can both observe an available slot before either inserts a booking. An ordinary check followed by INSERT can therefore race.
@@ -90,26 +149,70 @@ ACID: Atomicity rolls back failed mutations; Consistency enforces FKs, time/stat
 
 ## Tests
 
+Java 17 and Maven run the backend suite. Node.js runs the frontend regression tests.
+
 ```sh
-mvn test
+mvn verify
+node --test scripts/tests/assistant.test.cjs
 ```
 
-The suite includes service unit tests plus real HTTP integration tests with JDBC-loaded credentials, independent session cookies, CSRF, role/owner checks, cancellation/rebooking, pagination, provider operations and two concurrent customer requests. The concurrency test starts two worker threads behind a latch and asserts statuses **201 and 409**, then verifies one active appointment in the database.
+The latest local validation on November 11, 2026 passed **89 Java tests on H2**, **89 Java tests on MySQL 8.4**, and **4 JavaScript tests**. Both Java runs had zero failures, errors or skipped tests.
 
-To repeat against MySQL, create a dedicated empty `tutorconnect_test` database and grant the test account access:
+Run the AI concurrency regression directly.
 
 ```sh
-TEST_DB_URL='jdbc:mysql://localhost:3307/tutorconnect_test?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true' \
-TEST_DB_USERNAME=tutorconnect TEST_DB_PASSWORD=tutorconnect-demo \
+mvn '-Dtest=AiWorkflowTests#twoAgentCustomersExactlyOneWinsAfterConfirmation' test
+```
+
+Two authenticated customers obtain proposals for the same slot and confirm concurrently. Readiness/start latches coordinate the requests. The test asserts HTTP **200 and 409**, then checks that the database contains exactly one active appointment. The normal booking concurrency test expects **201 and 409**.
+
+Other tests cover confirmation tokens, RBAC, CSRF, saved-history ownership and re-login, invalid-date recovery, provider form errors, RAG retrieval, reminder scheduling, delivery and deduplication. Repeatable tests use scripted external model responses while exercising the actual Spring AI tool loop, HTTP sessions and database.
+
+Set up the dedicated MySQL test database, then run its suite.
+
+```sh
+docker compose up -d --wait db
+docker compose exec -T -e MYSQL_PWD=root-demo-only db mysql -uroot -e "CREATE DATABASE IF NOT EXISTS tutorconnect_test; GRANT ALL PRIVILEGES ON tutorconnect_test.* TO 'tutorconnect'@'%';"
 sh scripts/test-mysql.sh
 ```
 
-The test profile resets its database. The script restricts the target database to `tutorconnect_test`; never point test configuration at the application database. GitHub Actions verifies both H2 and MySQL 8.4 on Java 17.
+The test profile resets `tutorconnect_test`. The script restricts its target to that database.
 
-## Submission
+With Gemini configured, run a live policy query.
 
-See `docs/milestone2-report.md`, the accompanying PDF report, and `docs/code-walkthrough.md`. Record your own code walkthrough of at least five minutes: explain the code, transactions, SQL, RBAC and tests, rather than only clicking through the app. Submit the report/source ZIP, GitHub repository link and your video link. Check course General Rules separately; they were not included in the provided Milestone 2 document.
+```sh
+python3 scripts/ai-live-smoke.py
+```
 
+GitHub Actions is configured to run H2/MySQL verification, frontend tests and a container smoke test. Hosted results are listed on the [Actions page](https://github.com/Lushangtu123/CMPE-172-Milestone/actions).
+
+## AI request troubleshooting
+
+The browser displays progress and stops waiting for a chat after 45 seconds. Inspect `docker compose logs --tail=100 app` for a failed request. Logs include the failure category, tool and cause type.
+
+The availability tool specifies calendar dates in `yyyy-MM-dd` format. If a model supplies an invalid date, the tool loop asks it to correct the parameters and retry within the round limit. The assistant reports the actual availability when a query succeeds. Providers can add new availability when the requested range is empty.
+
+After changing `.env`, recreate the application container to load the new environment.
+
+```sh
+docker compose up -d --no-deps --wait app
+```
+
+If an explicit confirmation request times out, check My appointments before retrying. A browser timeout can occur after the server commits a booking.
+
+## Milestone 4 submission
+
+Package the PDF report and complete source, knowledge file and tests as `CMPE172_Milestone4_FirstName_LastName.zip`. Submit that ZIP with the GitHub repository link and a student-recorded code walkthrough link.
+
+The video must last at least five minutes and explain the implementation and tests. Cover AiChatService, AiBookingTools, the confirmation transaction path, AiReminderService, ReminderTransaction and AiKnowledgeService. Live confirmation writes and personalized reminders still need the recorded demonstration described in the run guide.
+
+- [PDF report](docs/milestone4/report.pdf)
+- [Editable Word report](docs/milestone4/report.docx)
+- [Report source](docs/milestone4/report.md)
+- [Run and recording guide](docs/milestone4/README_zh.md)
+- [Walkthrough outline](docs/milestone4/speech.md)
+- [Validation evidence](docs/milestone4/validation.md)
+- [Milestone 2 report](docs/milestone2-report.md)
 
 ## Milestone 3 — integration and deployment
 
@@ -130,23 +233,4 @@ sh scripts/test-mysql.sh '-Dtest=Milestone3IntegrationTests'
 python3 scripts/smoke.py --base-url http://localhost:8080
 ```
 
-The multi-stage Dockerfile compiles on Java 17, runs as a non-root user and includes a Java health probe. `docker-compose.yml` now runs app + MySQL while preserving the prior Compose project and volume names. New notification tables are created additively at startup, including on existing volumes. GitHub Actions verifies H2/MySQL tests and builds/smokes the image on each push or pull request. A hosted CI run is separate from local validation and is not implied until this branch is published.
-
-## Milestone 4 Enterprise AI
-
-Spring AI adds a customer assistant at `/customer/assistant`, server-enforced confirmation,
-vector-grounded policy answers, and scheduled personalized reminders through the existing
-notification outbox. Providers can run their reminder agent from the dashboard.
-
-Customers can open **Chat history** to read saved conversations after starting a new chat or
-signing in again. Past conversations are read-only. The current model context and pending
-appointment confirmations remain tied to the login session.
-
-The original app works with AI disabled. To enable real Gemini calls, copy `.env.example`
-to `.env`, set your Google AI Studio key locally, then run `docker compose up -d --build --wait`.
-Never commit `.env` or put a key in a report, screenshot or video. Model names can be overridden
-with `GEMINI_CHAT_MODEL` and `GEMINI_EMBEDDING_MODEL`.
-
-See [the Milestone 4 run guide](docs/milestone4/README_zh.md) for setup, test commands,
-manual-trigger behavior and the recording checklist. A missing key yields HTTP503 from AI
-operations while ordinary booking and health endpoints remain available.
+The multi-stage Dockerfile compiles on Java 17, runs as a non-root user and includes a Java health probe. `docker-compose.yml` now runs app + MySQL while preserving the prior Compose project and volume names. New notification tables are created additively at startup, including on existing volumes. GitHub Actions verifies H2/MySQL tests and builds/smokes the image on each push or pull request. Check the Actions page for the status of each hosted run.

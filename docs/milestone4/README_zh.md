@@ -14,7 +14,7 @@ cp .env.example .env
 
 用编辑器打开本机 `.env`，填入自己的 `GEMINI_API_KEY`。保留 `AI_ENABLED=true`。`.env` 已加入 Git 和 Docker 构建忽略规则，Compose 只在运行时传入配置。不要设置 project-id 或 location，也不需要 Google Cloud service account。
 
-默认模型是已查证的 `gemini-3.8-flash`，文字向量模型是 `gemini-embedding-001`。可通过环境变量覆盖；若账户没有模型权限或遇到额度限制，请按 Google 当前模型列表和账户配额选择可用模型，不能用离线测试结果代替真实演示。
+项目示例默认使用 `gemini-3.8-flash`，本机实际验证通过的是 `gemini-3.1-flash-lite`，文字向量模型使用 `gemini-embedding-001`。可在本机 `.env` 设置 `GEMINI_CHAT_MODEL=gemini-3.1-flash-lite`。模型可用性以账户权限和配额为准。
 
 ## 2 运行
 
@@ -44,12 +44,12 @@ mvn spring-boot:run -Dspring-boot.run.profiles=demo
 
 1. 问：`Find the earliest algebra session in the next seven days.` 检查返回的真实时段。
 2. 继续：`Please propose booking that session.` 此时数据库不会新增预约。
-3. 查看页面中的服务、tutor、UTC 时间摘要，点击 Confirm this action 后才提交。
+3. 查看页面中的课程、tutor、UTC 时间摘要，点击 Confirm booking 后才提交。取消预约对应 Confirm cancellation。
 4. 问：`List my appointments.` 再提出取消，查看摘要并确认。
 5. 问：`What is the cancellation policy? Cite the retrieved policy ID.` 展示政策来源，例如 policy-cancellation。
 6. 用第二位客户抢先预约同一时段，再确认旧提案，可展示409冲突；让助手重新查询可选时段。
 
-每个会话仅有一个待确认动作；新问题会使旧提案失效。提案5分钟过期。输入 yes 不会绕过确认按钮。聊天记录最多保留20条消息，随登录会话结束而失效。
+每个会话仅有一个待确认动作，新问题会使旧提案失效。提案5分钟过期。输入 yes 不会绕过确认按钮。模型上下文保留最近20条消息，成功对话会另外保存到数据库。点击 Chat history 可以查看自己的历史记录，New chat 和重新登录后仍可查看。待确认动作与登录会话绑定。
 
 ## 4 定时与手动提醒
 
