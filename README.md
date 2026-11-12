@@ -4,7 +4,7 @@ TutorConnect is a tutoring appointment system with a Gemini-powered scheduling a
 
 Customers find sessions and manage their appointments. Providers manage availability and upcoming appointments. Both normal and AI-confirmed bookings use the same transactional service to prevent double-booking.
 
-[PDF report](docs/milestone4/report.pdf) · [Editable Word report](docs/milestone4/report.docx) · [中文运行与录屏指南](docs/milestone4/README_zh.md) · [Validation evidence](docs/milestone4/validation.md)
+[PDF report](docs/milestone4/report.pdf) · [Editable Word report](docs/milestone4/report.docx) · [Validation evidence](docs/milestone4/validation.md)
 
 ## Milestone 4 features
 
@@ -204,19 +204,18 @@ If an explicit confirmation request times out, check My appointments before retr
 
 Package the PDF report and complete source, knowledge file and tests as `CMPE172_Milestone4_FirstName_LastName.zip`. Submit that ZIP with the GitHub repository link and a student-recorded code walkthrough link.
 
-The video must last at least five minutes and explain the implementation and tests. Cover AiChatService, AiBookingTools, the confirmation transaction path, AiReminderService, ReminderTransaction and AiKnowledgeService. Live confirmation writes and personalized reminders still need the recorded demonstration described in the run guide.
+The video must last at least five minutes and explain the implementation and tests. Cover AiChatService, AiBookingTools, the confirmation transaction path, AiReminderService, ReminderTransaction and AiKnowledgeService. Include a recorded demonstration of live confirmation writes and personalized reminders.
 
 - [PDF report](docs/milestone4/report.pdf)
 - [Editable Word report](docs/milestone4/report.docx)
 - [Report source](docs/milestone4/report.md)
-- [Run and recording guide](docs/milestone4/README_zh.md)
 - [Walkthrough outline](docs/milestone4/speech.md)
 - [Validation evidence](docs/milestone4/validation.md)
 - [Milestone 2 report](docs/milestone2-report.md)
 
 ## Milestone 3 — integration and deployment
 
-See [Chinese run/recording guide](docs/milestone3/README_zh.md), [design](docs/milestone3/design.md), [report](docs/milestone3/report.md), [distribution diagram](docs/milestone3/distribution.png), [validation](docs/milestone3/validation.md), and [walkthrough speech](docs/milestone3/speech.md).
+See [design](docs/milestone3/design.md), [report](docs/milestone3/report.md), [distribution diagram](docs/milestone3/distribution.png), [validation](docs/milestone3/validation.md), and [walkthrough speech](docs/milestone3/speech.md).
 
 The existing booking/cancellation transaction now also inserts a durable notification outbox event. After commit, a notification Gateway posts one coarse-grained DTO (`eventId`, `recipient`, `type`, `message`) to a mock second controller at `/internal/notifications`. The internal endpoint uses a shared service key and durable event-ID/payload deduplication; it sends no real messages. The ordinary browser Session, role restrictions and CSRF protections remain enabled.
 
@@ -225,7 +224,7 @@ The Gateway bounds connection and complete-response time, makes up to three atte
 `GET /health` checks `SELECT 1`, returning 200/UP or 503/DOWN. `GET /api/provider/metrics` exposes Micrometer booking success/failure counts, cancellation and notification counts, average service booking latency, and durable queue counts. Metrics require a provider session. Logs use event/appointment IDs, types and failure categories; notification content, recipient addresses and service tokens are not logged by the new notification code.
 
 ```sh
-# Dedicated MySQL database must be set up first (see Chinese guide).
+# Set up the dedicated MySQL database using the Tests section above.
 sh scripts/test-mysql.sh '-Dtest=NotificationDownTests'
 sh scripts/test-mysql.sh '-Dtest=Milestone3IntegrationTests'
 
