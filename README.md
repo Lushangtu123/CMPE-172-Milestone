@@ -4,8 +4,6 @@ TutorConnect is a tutoring appointment system with a Gemini-powered scheduling a
 
 Customers find sessions and manage their appointments. Providers manage availability and upcoming appointments. Both normal and AI-confirmed bookings use the same transactional service to prevent double-booking.
 
-[PDF report](docs/milestone4/report.pdf) · [Editable Word report](docs/milestone4/report.docx) · [Validation evidence](docs/milestone4/validation.md)
-
 ## Milestone 4 features
 
 - **Conversational agent.** Spring AI ChatClient calls service-backed tools to check availability, list the customer's appointments and propose bookings or cancellations. The assistant can use several tools in one turn.
@@ -206,11 +204,8 @@ Package the PDF report and complete source, knowledge file and tests as `CMPE172
 
 The video must last at least five minutes and explain the implementation and tests. Cover AiChatService, AiBookingTools, the confirmation transaction path, AiReminderService, ReminderTransaction and AiKnowledgeService. Include a recorded demonstration of live confirmation writes and personalized reminders.
 
-- [PDF report](docs/milestone4/report.pdf)
-- [Editable Word report](docs/milestone4/report.docx)
 - [Report source](docs/milestone4/report.md)
 - [Walkthrough outline](docs/milestone4/speech.md)
-- [Validation evidence](docs/milestone4/validation.md)
 - [Milestone 2 report](docs/milestone2-report.md)
 
 ## Milestone 3 — integration and deployment
