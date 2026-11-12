@@ -7,11 +7,16 @@ import com.example.tutorconnect.exception.AppException;
 import com.example.tutorconnect.security.Account;
 import com.example.tutorconnect.service.*;
 import java.time.*;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import org.springframework.ai.tool.annotation.*;
 
 /** Per request object: actor and state are supplied by the server, absent from tool schemas. */
 public final class AiBookingTools {
+  private static final DateTimeFormatter DATE_TIME =
+      DateTimeFormatter.ofPattern("EEE, MMM d, uuuu · HH:mm", Locale.ENGLISH);
+  private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+
   private final Account actor;
   private final AiConversation state;
   private final SlotService slots;
@@ -38,8 +43,15 @@ public final class AiBookingTools {
           "Check live available tutoring sessions in a UTC date range of at most 31 days. Returns"
               + " earliest first. Use actual returned IDs. Does not reserve.")
   public List<SlotDto> checkAvailability(
-      String fromDate,
-      String toDate,
+      @ToolParam(
+              description =
+                  "Inclusive UTC start date in yyyy-MM-dd format. Use a calendar date, not a"
+                      + " timestamp or relative phrase.")
+          String fromDate,
+      @ToolParam(
+              description =
+                  "Inclusive UTC end date in yyyy-MM-dd format, within 30 days after fromDate.")
+          String toDate,
       @ToolParam(required = false) Long serviceId,
       @ToolParam(required = false) Long providerId) {
     state.tool();
@@ -77,19 +89,9 @@ public final class AiBookingTools {
           true,
           "message",
           "This slot is unavailable. Check availability and offer alternatives.");
-    return state.propose(
-        "BOOK",
-        slotId,
-        serviceId,
-        "Book "
-            + slot.serviceName()
-            + " with "
-            + slot.providerName()
-            + " on "
-            + slot.startTime()
-            + " UTC ("
-            + slot.durationMinutes()
-            + " minutes).");
+    var details =
+        details(slot.serviceName(), slot.providerName(), slot.startTime(), slot.endTime());
+    return state.propose("BOOK", slotId, serviceId, "Book " + summary(details) + ".", details);
   }
 
   @Tool(
@@ -101,19 +103,24 @@ public final class AiBookingTools {
     var a = appointments.owned(actor.id(), appointmentId);
     if (!"BOOKED".equals(a.status()) || !a.startTime().isAfter(LocalDateTime.now(ZoneOffset.UTC)))
       throw new AppException(CONFLICT, "Only future booked appointments can be cancelled.");
+    var details = details(a.serviceName(), a.providerName(), a.startTime(), a.endTime());
     return state.propose(
         "CANCEL",
         appointmentId,
         0,
-        "Cancel appointment #"
-            + appointmentId
-            + ": "
-            + a.serviceName()
-            + " with "
-            + a.providerName()
-            + " on "
-            + a.startTime()
-            + " UTC.");
+        "Cancel appointment #" + appointmentId + ": " + summary(details) + ".",
+        details);
+  }
+
+  private AiConversation.ProposalDetails details(
+      String service, String tutor, LocalDateTime start, LocalDateTime end) {
+    var endFormat = start.toLocalDate().equals(end.toLocalDate()) ? TIME : DATE_TIME;
+    return new AiConversation.ProposalDetails(
+        service, tutor, DATE_TIME.format(start) + " – " + endFormat.format(end) + " UTC");
+  }
+
+  private String summary(AiConversation.ProposalDetails details) {
+    return details.service() + " with " + details.tutor() + " on " + details.time();
   }
 
   @Tool(

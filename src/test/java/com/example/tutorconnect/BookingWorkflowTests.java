@@ -90,6 +90,82 @@ class BookingWorkflowTests {
   }
 
   @Test
+  void loginRedirectsToTheWorkPageForEachRole() throws Exception {
+    var provider = new Browser();
+    provider.token("/login");
+    assertThat(
+            provider
+                .post("/login", "username=priya.shah@example.com&password=TutorDemo123%21")
+                .headers()
+                .firstValue("Location")
+                .orElseThrow())
+        .endsWith("/provider/dashboard");
+    var customer = new Browser();
+    customer.token("/login");
+    assertThat(
+            customer
+                .post("/login", "username=maya.patel@example.com&password=TutorDemo123%21")
+                .headers()
+                .firstValue("Location")
+                .orElseThrow())
+        .endsWith("/slots");
+  }
+
+  @Test
+  void emptySessionPagesExplainWhetherFiltersAreApplied() throws Exception {
+    var b = new Browser();
+    assertThat(b.get("/slots?providerId=1&serviceId=3").body())
+        .contains("No sessions match your filters", "Clear filters")
+        .doesNotContain("Session pages");
+    assertThat(b.get("/slots?size=1").body()).contains("Session pages", "Next");
+    jdbc.update("UPDATE availability_slots SET active=FALSE");
+    assertThat(b.get("/slots").body())
+        .contains("No upcoming sessions are available")
+        .doesNotContain("match your filters", "Clear filters", "Session pages");
+    assertThat(b.get("/slots?providerId=1").body())
+        .contains("No upcoming sessions are available")
+        .doesNotContain("match your filters", "Session pages");
+  }
+
+  @Test
+  void customerReviewsCancellationBeforePosting() throws Exception {
+    var maya = login("maya.patel@example.com");
+    var sam = login("sam.rivera@example.com");
+    assertThat(maya.post("/api/customer/appointments", "slotId=1&serviceId=1").statusCode())
+        .isEqualTo(201);
+    var id =
+        jdbc.queryForObject("SELECT appointment_id FROM appointments WHERE slot_id=1", Long.class);
+    var path = "/customer/appointments/" + id + "/cancel";
+    assertThat(maya.get("/customer/appointments").body()).contains("href=\"" + path + "\"");
+    assertThat(sam.get(path).statusCode()).isEqualTo(403);
+    assertThat(maya.get(path).body())
+        .contains("Confirm cancellation", "Algebra Coaching", "Priya Shah", "UTC");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM appointments WHERE appointment_id=?", String.class, id))
+        .isEqualTo("BOOKED");
+    maya.token(path);
+    assertThat(maya.post(path, "").statusCode()).isEqualTo(302);
+    assertThat(maya.get("/customer/appointments").body()).contains("CANCELLED");
+  }
+
+  @Test
+  void dashboardShowsPastAvailabilityWithoutARemoveLink() throws Exception {
+    var provider = login("priya.shah@example.com");
+    var path = "/provider/slots/1/remove";
+    assertThat(provider.get(path).body()).contains("Confirm removal", "Algebra Coaching", "UTC");
+    assertThat(provider.get("/provider/slots/4/remove").statusCode()).isEqualTo(403);
+    jdbc.update(
+        "UPDATE availability_slots SET start_time=TIMESTAMPADD(DAY,-2,CURRENT_TIMESTAMP),"
+            + "end_time=TIMESTAMPADD(DAY,-1,CURRENT_TIMESTAMP) WHERE slot_id=1");
+    assertThat(provider.get(path).statusCode()).isEqualTo(409);
+    assertThat(provider.post(path, "").statusCode()).isEqualTo(409);
+    assertThat(provider.get("/provider/dashboard").body())
+        .contains("Upcoming appointments", "Availability history", "Expired")
+        .doesNotContain("href=\"" + path + "\"");
+  }
+
+  @Test
   void bookingCancellationAndRebookingKeepHistory() throws Exception {
     var maya = login("maya.patel@example.com");
     var sam = login("sam.rivera@example.com");
@@ -168,6 +244,37 @@ class BookingWorkflowTests {
     b.login("maya.patel@example.com");
     assertThat(b.post("/logout", "").statusCode()).isEqualTo(302);
     assertThat(b.get("/api/customer/appointments").statusCode()).isEqualTo(401);
+  }
+
+  @Test
+  void availabilityFormKeepsValuesAndMarksTimeError() throws Exception {
+    var provider = login("priya.shah@example.com");
+    var start =
+        java.time.LocalDateTime.now(java.time.ZoneOffset.UTC).plusDays(9).withSecond(0).withNano(0);
+    var invalidEnd = start.plusMinutes(10);
+    String form = "serviceId=1&startTime=" + start + "&endTime=";
+    var invalid = provider.post("/provider/slots", form + invalidEnd);
+    assertThat(invalid.statusCode()).isEqualTo(400);
+    assertThat(invalid.body())
+        .contains(
+            "Teaching dashboard",
+            "endTime-error",
+            "Slot length must match the service duration.",
+            start.toString(),
+            invalidEnd.toString());
+    assertThat(provider.post("/provider/slots", form + start.plusHours(1)).statusCode())
+        .isEqualTo(302);
+    var overlap = provider.post("/provider/slots", form + start.plusHours(1));
+    assertThat(overlap.statusCode()).isEqualTo(409);
+    assertThat(overlap.body()).contains("Teaching dashboard", "startTime-error", start.toString());
+    var malformed =
+        provider.post("/provider/slots", "serviceId=1&startTime=invalid&endTime=" + invalidEnd);
+    assertThat(malformed.statusCode()).isEqualTo(400);
+    assertThat(malformed.body()).contains("Enter a valid start time.");
+    var retainedEnd =
+        Pattern.compile("id=\"endTime\"[^>]*value=\"([^\"]+)\"").matcher(malformed.body());
+    assertThat(retainedEnd.find()).isTrue();
+    assertThat(java.time.LocalDateTime.parse(retainedEnd.group(1))).isEqualTo(invalidEnd);
   }
 
   @Test

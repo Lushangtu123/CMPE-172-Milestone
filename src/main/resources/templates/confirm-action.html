@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Review change · TutorConnect</title>
+  <link rel="stylesheet" href="/assets/app.css">
+</head>
+<body>
+<header th:replace="~{fragments :: nav}"></header>
+<main id="main-content" tabindex="-1" class="task-page">
+  <section class="narrow action-review" th:with="cancelling=${appointment != null}, details=${cancelling ? appointment : slot}">
+    <h1 th:text="${cancelling ? 'Cancel appointment?' : 'Remove availability?'}"></h1>
+    <div class="panel">
+      <dl>
+        <dt>Service</dt><dd th:text="${details.serviceName}"></dd>
+        <dt>Tutor</dt><dd th:text="${details.providerName}"></dd>
+        <dt>Date and time</dt>
+        <dd th:text="${#temporals.format(details.startTime,'EEE, MMM d yyyy · HH:mm') + '–' + #temporals.format(details.endTime,'HH:mm') + ' UTC'}"></dd>
+      </dl>
+      <p th:text="${cancelling ? 'Cancelling releases this time for another student to book.' : 'Removing this slot takes it off the booking page.'}"></p>
+      <form class="review-actions" method="post" th:action="${cancelling} ? @{/customer/appointments/{id}/cancel(id=${appointment.appointmentId})} : @{/provider/slots/{id}/remove(id=${slot.slotId})}">
+        <a class="outline" th:href="${cancelling} ? @{/customer/appointments} : @{/provider/dashboard#availability}" th:text="${cancelling ? 'Keep appointment' : 'Keep slot'}"></a>
+        <button class="button destructive" th:text="${cancelling ? 'Confirm cancellation' : 'Confirm removal'}"></button>
+      </form>
+    </div>
+  </section>
+</main>
+<footer>LEARN WITH PURPOSE <span>TutorConnect · All appointment times are UTC</span></footer>
+</body>
+</html>

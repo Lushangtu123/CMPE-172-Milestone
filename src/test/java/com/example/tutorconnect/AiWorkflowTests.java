@@ -3,6 +3,8 @@ package com.example.tutorconnect;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.*;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
@@ -17,6 +19,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.jdbc.Sql;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -46,6 +49,11 @@ class AiWorkflowTests {
   void firstTurnNeverWritesEvenIfModelRequestsBook() throws Exception {
     var b = customer("maya.patel@example.com");
     assertThat(chat(b, "book 1")).isNotBlank();
+    var details =
+        json.readTree(b.get("/api/customer/ai/history").body()).path("pending").path("details");
+    assertThat(details.path("service").asText()).isEqualTo("Algebra Coaching");
+    assertThat(details.path("tutor").asText()).isEqualTo("Priya Shah");
+    assertThat(details.path("time").asText()).contains("UTC").doesNotContain("T0");
     assertThat(
             jdbc.queryForObject("SELECT COUNT(*) FROM appointments WHERE slot_id=1", Integer.class))
         .isZero();
@@ -152,6 +160,16 @@ class AiWorkflowTests {
   }
 
   @Test
+  void malformedModelDatesAreCorrectedWithoutFailingTheChat() throws Exception {
+    var b = customer("maya.patel@example.com");
+    var response = b.post("/api/customer/ai/chat", "message=retry+dates");
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+    assertThat(response.body()).contains("I checked the current session availability.");
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM appointments", Integer.class))
+        .isEqualTo(1);
+  }
+
+  @Test
   void multiStepAvailabilityThenBookAndMultiTurnHistory() throws Exception {
     var b = customer("maya.patel@example.com");
     assertThat(chat(b, "earliest")).isNotBlank();
@@ -160,6 +178,50 @@ class AiWorkflowTests {
     assertThat(r.body()).contains("earliest");
     chat(b, "list");
     assertThat(b.get("/api/customer/ai/history").body()).contains("list");
+  }
+
+  @Test
+  void appointmentReplyShowsReadableDetailsInsteadOfToolPayload() throws Exception {
+    var b = customer("maya.patel@example.com");
+    var result = b.post("/api/customer/ai/chat", "message=List+my+upcoming+appointments.");
+    assertThat(result.statusCode()).isEqualTo(200);
+    String reply = json.readTree(result.body()).path("messages").get(1).path("text").asText();
+    assertThat(reply)
+        .contains("Your upcoming appointments", "Algebra Coaching with Priya Shah", "UTC")
+        .doesNotContain("ToolResponse", "responseData", "\"userId\"", "\"slotId\"");
+  }
+
+  @Test
+  void chatHistorySurvivesNewChatAndLogoutAndIsPrivate() throws Exception {
+    var maya = customer("maya.patel@example.com");
+    var token = chat(maya, "book 1");
+    var historyPath = "/customer/assistant/history";
+    assertThat(maya.get("/customer/assistant").body()).contains("Chat history");
+    assertThat(maya.post("/api/customer/ai/reset", "").body()).contains("\"messages\":[]");
+    assertThat(maya.post("/api/customer/ai/confirm", "token=" + token).statusCode()).isEqualTo(409);
+    chat(maya, "list");
+    var cancellation = chat(maya, "cancel 1");
+    assertThat(maya.post("/api/customer/ai/confirm", "token=" + cancellation).statusCode())
+        .isEqualTo(200);
+    assertThat(maya.post("/logout", "").statusCode()).isEqualTo(302);
+
+    var returning = customer("maya.patel@example.com");
+    var history = returning.get(historyPath);
+    assertThat(history.statusCode()).isEqualTo(200);
+    assertThat(history.body()).contains("book 1", ">list<");
+    var thread = java.util.regex.Pattern.compile(historyPath + "/[0-9]+").matcher(history.body());
+    assertThat(thread.find()).isTrue();
+    var latest = thread.group();
+    assertThat(thread.find()).isTrue();
+    var older = thread.group();
+    assertThat(returning.get(older).body()).contains("book 1").doesNotContain(token, ">list<");
+    assertThat(returning.get(latest).body())
+        .contains(">list<", "cancel 1", "Cancellation confirmed. Appointment #1.")
+        .doesNotContain("book 1", cancellation);
+    var sam = customer("sam.rivera@example.com");
+    assertThat(sam.get(historyPath).body()).doesNotContain("book 1", ">list<");
+    assertThat(sam.get(older).statusCode()).isEqualTo(404);
+    assertThat(customer("priya.shah@example.com").get(older).statusCode()).isEqualTo(403);
   }
 
   @Test
@@ -253,6 +315,10 @@ class AiWorkflowTests {
   }
 
   static class ScriptedModel implements ChatModel {
+    private final ObjectMapper json = new ObjectMapper();
+    private static final DateTimeFormatter UTC_TIME =
+        DateTimeFormatter.ofPattern("MMM d, uuuu 'at' HH:mm 'UTC'", Locale.ENGLISH);
+
     public ChatResponse call(Prompt prompt) {
       var messages = prompt.getInstructions();
       String user =
@@ -270,14 +336,44 @@ class AiWorkflowTests {
       boolean toolLast = messages.get(messages.size() - 1) instanceof ToolResponseMessage;
       if (toolLast) {
         var last = (ToolResponseMessage) messages.get(messages.size() - 1);
+        if (user.equals("retry dates")) {
+          if (last.getResponses().stream().anyMatch(r -> r.responseData().contains("yyyy-MM-dd")))
+            return tool(
+                "checkAvailability",
+                "{\"fromDate\":\""
+                    + java.time.LocalDate.now(java.time.ZoneOffset.UTC)
+                    + "\",\"toDate\":\""
+                    + java.time.LocalDate.now(java.time.ZoneOffset.UTC).plusDays(6)
+                    + "\"}");
+          return new ChatResponse(
+              List.of(
+                  new Generation(
+                      new AssistantMessage("I checked the current session availability."))));
+        }
         if (user.equals("earliest")
             && last.getResponses().stream().anyMatch(x -> x.name().equals("checkAvailability")))
           return tool("book", "{\"slotId\":1,\"serviceId\":1}");
-        return new ChatResponse(
-            List.of(new Generation(new AssistantMessage(last.getResponses().toString()))));
+        var response = last.getResponses().get(0);
+        var data = json.readTree(response.responseData());
+        String answer =
+            switch (response.name()) {
+              case "book", "cancel" ->
+                  data.has("summary")
+                      ? "Please review the details and confirm if they are correct.\n\n"
+                          + data.path("summary").asText()
+                      : data.path("message").asText();
+              case "listMyAppointments" ->
+                  appointmentsReply(data, user.toLowerCase(Locale.ROOT).contains("upcoming"));
+              case "searchKnowledge" -> policyReply(data);
+              default ->
+                  throw new IllegalStateException("No scripted reply for " + response.name());
+            };
+        return new ChatResponse(List.of(new Generation(new AssistantMessage(answer))));
       }
       if (user.contains("policy"))
         return tool("searchKnowledge", "{\"question\":\"cancellation policy\"}");
+      if (user.equals("retry dates"))
+        return tool("checkAvailability", "{\"fromDate\":\"today\",\"toDate\":\"next week\"}");
       if (user.startsWith("book"))
         return tool("book", "{\"slotId\":" + user.split(" ")[1] + ",\"serviceId\":1}");
       if (user.startsWith("cancel"))
@@ -291,6 +387,34 @@ class AiWorkflowTests {
                 + java.time.LocalDate.now(java.time.ZoneOffset.UTC).plusDays(6)
                 + "\"}");
       return tool("listMyAppointments", "{}");
+    }
+
+    private String appointmentsReply(JsonNode appointments, boolean upcoming) {
+      var lines = new ArrayList<String>();
+      for (var appointment : appointments) {
+        if (upcoming && !appointment.path("status").asText().equals("BOOKED")) continue;
+        var start = LocalDateTime.parse(appointment.path("startTime").asText());
+        lines.add(
+            "• "
+                + appointment.path("serviceName").asText()
+                + " with "
+                + appointment.path("providerName").asText()
+                + " on "
+                + UTC_TIME.format(start));
+      }
+      String description = upcoming ? "upcoming appointments" : "appointments";
+      return lines.isEmpty()
+          ? "You have no " + description + "."
+          : "Your " + description + ":\n" + String.join("\n", lines);
+    }
+
+    private String policyReply(JsonNode passages) {
+      var answers = new ArrayList<String>();
+      for (var passage : passages)
+        answers.add(passage.path("text").asText() + "\nSource: " + passage.path("source").asText());
+      return answers.isEmpty()
+          ? "I could not find a policy that answers that question."
+          : String.join("\n\n", answers);
     }
 
     ChatResponse tool(String name, String args) {

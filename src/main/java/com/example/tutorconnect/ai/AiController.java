@@ -1,8 +1,10 @@
 package com.example.tutorconnect.ai;
 
+import com.example.tutorconnect.exception.AppException;
 import com.example.tutorconnect.security.Account;
 import jakarta.servlet.http.HttpSession;
 import java.util.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -11,9 +13,12 @@ import org.springframework.web.bind.annotation.*;
 @Controller
 public class AiController {
   private final AiChatService chat;
+  private final AiChatHistory historyStore;
+  private static final int HISTORY_PAGE_SIZE = 20;
 
-  public AiController(AiChatService chat) {
+  public AiController(AiChatService chat, AiChatHistory historyStore) {
     this.chat = chat;
+    this.historyStore = historyStore;
   }
 
   private AiConversation state(HttpSession session, Account actor) {
@@ -30,7 +35,34 @@ public class AiController {
   @GetMapping("/customer/assistant")
   String page(@AuthenticationPrincipal Account actor, Model model) {
     model.addAttribute("account", actor);
+    model.addAttribute("currentPath", "/customer/assistant");
+    model.addAttribute("recentChats", historyStore.recent(actor.id(), 5, 0));
     return "assistant";
+  }
+
+  @GetMapping("/customer/assistant/history")
+  String savedChats(
+      @AuthenticationPrincipal Account actor,
+      @RequestParam(defaultValue = "0") int page,
+      Model model) {
+    if (page < 0) throw new AppException(HttpStatus.BAD_REQUEST, "Invalid history page.");
+    var threads =
+        historyStore.recent(actor.id(), HISTORY_PAGE_SIZE + 1, (long) page * HISTORY_PAGE_SIZE);
+    model.addAttribute("threads", threads.stream().limit(HISTORY_PAGE_SIZE).toList());
+    model.addAttribute("page", page);
+    model.addAttribute("hasNext", threads.size() > HISTORY_PAGE_SIZE);
+    model.addAttribute("account", actor);
+    model.addAttribute("currentPath", "/customer/assistant");
+    return "assistant-history";
+  }
+
+  @GetMapping("/customer/assistant/history/{threadId}")
+  String savedChat(
+      @AuthenticationPrincipal Account actor, @PathVariable long threadId, Model model) {
+    model.addAttribute("transcript", historyStore.transcript(actor.id(), threadId));
+    model.addAttribute("account", actor);
+    model.addAttribute("currentPath", "/customer/assistant");
+    return "assistant-history";
   }
 
   @PostMapping("/api/customer/ai/chat")
@@ -77,8 +109,7 @@ public class AiController {
   Map<String, Object> reset(@AuthenticationPrincipal Account actor, HttpSession session) {
     var s = state(session, actor);
     synchronized (s) {
-      s.pending = null;
-      s.turns.clear();
+      s.reset();
       return s.view();
     }
   }

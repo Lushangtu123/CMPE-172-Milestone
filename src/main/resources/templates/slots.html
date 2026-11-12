@@ -1,7 +1,40 @@
 <!DOCTYPE html>
-<html lang="en" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TutorConnect</title><link rel="stylesheet" href="/assets/app.css"></head><body><header th:replace="~{fragments :: nav}"></header><main><section class="page-heading"><div><p class="eyebrow">SPACE TO LEARN</p><h1>Find your <em>next session.</em></h1><p>Choose your focus. All times shown in UTC.</p></div><span class="count" th:text="${slots.total + ' available'}"></span></section>
-<form action="/slots" method="get" class="filters"><div><label for="provider">Tutor</label><select id="provider" name="providerId"><option value="">All tutors</option><option th:each="p:${providers}" th:value="${p.providerId}" th:text="${p.name}" th:selected="${p.providerId == providerId}"></option></select></div><div><label for="service">Subject</label><select id="service" name="serviceId"><option value="">All subjects</option><option th:each="s:${services}" th:value="${s.serviceId}" th:text="${s.name}" th:selected="${s.serviceId == serviceId}"></option></select></div><div><label for="date">Date (UTC)</label><input id="date" name="date" type="date" th:value="${date}"></div><button class="button">Find sessions</button><a class="reset" href="/slots">Reset</a></form>
-<p class="empty" th:if="${slots.items.isEmpty()}">No available sessions match these filters. Try another date or subject.</p>
-<section class="slot-grid"><article class="slot-card" th:each="s:${slots.items}"><div class="card-top"><span class="tag" th:text="${s.durationMinutes + ' MIN'}"></span><span class="available">● AVAILABLE</span></div><h2 th:text="${s.serviceName}"></h2><p class="muted" th:text="${s.description}"></p><div class="tutor"><span class="avatar" th:text="${#strings.substring(s.providerName,0,1)}"></span><strong th:text="${s.providerName}"></strong></div><div class="when"><strong th:text="${#temporals.format(s.startTime,'EEE, MMM d')}"></strong><span th:text="${#temporals.format(s.startTime,'HH:mm') + '–' + #temporals.format(s.endTime,'HH:mm') + ' UTC'}"></span></div><a class="button full" th:if="${account != null and account.role == 'CUSTOMER'}" th:href="@{/customer/book/{id}(id=${s.slotId})}">Book session <span>↗</span></a><a class="button full" th:if="${account == null}" href="/login">Log in to book <span>↗</span></a><span class="muted" th:if="${account != null and account.role == 'PROVIDER'}">Customer accounts can book sessions.</span></article></section>
-<nav class="pagination" aria-label="Session pages"><a th:if="${slots.page > 0}" th:href="@{/slots(page=${slots.page - 1},size=${slots.size},providerId=${providerId},serviceId=${serviceId},date=${date})}">← Previous</a><span th:text="${'Page ' + (slots.page + 1)}"></span><a th:if="${slots.hasNext()}" th:href="@{/slots(page=${slots.page + 1},size=${slots.size},providerId=${providerId},serviceId=${serviceId},date=${date})}">Next →</a></nav>
-<form th:if="${account != null}" th:action="@{/logout}" method="post" hidden><button>Log out</button></form></main><footer>LEARN WITH PURPOSE <span>TutorConnect · All appointment times are UTC</span></footer></body></html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Find a session · TutorConnect</title><link rel="stylesheet" href="/assets/app.css"></head><body><header th:replace="~{fragments :: nav}"></header><main id="main-content" tabindex="-1" class="task-page"><section class="page-heading sessions-heading">
+  <h1>Find a session</h1>
+  <span class="count" th:text="${slots.total + ' available'}"></span>
+  <p>All session times are shown in UTC.</p>
+</section>
+<form action="/slots" method="get" class="filters"><div><label for="provider">Tutor</label><select id="provider" name="providerId"><option value="">All tutors</option><option th:each="p:${providers}" th:value="${p.providerId}" th:text="${p.name}" th:selected="${p.providerId == providerId}"></option></select></div><div><label for="service">Subject</label><select id="service" name="serviceId"><option value="">All subjects</option><option th:each="s:${services}" th:value="${s.serviceId}" th:text="${s.name}" th:selected="${s.serviceId == serviceId}"></option></select></div><div><label for="date">Date (UTC)</label><input id="date" name="date" type="date" th:value="${date}"></div><button class="button">Find sessions</button><a th:if="${filtersApplied and !slots.items.isEmpty()}" class="reset" th:href="@{/slots}">Clear filters</a></form>
+<section class="empty session-empty" th:if="${slots.items.isEmpty()}">
+  <th:block th:if="${slots.total > 0}">
+    <h2>No sessions on this page</h2>
+    <a class="outline" th:href="@{/slots(providerId=${providerId},serviceId=${serviceId},date=${date},size=${slots.size})}">Back to the first page</a>
+  </th:block>
+  <th:block th:if="${slots.total == 0 and !noUpcomingSessions}">
+    <h2>No sessions match your filters</h2><p>Try a different tutor, subject, or date.</p>
+    <a class="outline" th:href="@{/slots}">Clear filters</a>
+  </th:block>
+  <th:block th:if="${noUpcomingSessions}">
+    <h2>No upcoming sessions are available</h2><p>Check back when tutors add new times.</p>
+  </th:block>
+</section>
+<section class="slot-grid" aria-label="Available sessions">
+  <article class="slot-card" th:each="s : ${slots.items}">
+    <h2 th:text="${s.serviceName}"></h2>
+    <p class="muted slot-description" th:text="${s.description}"></p>
+    <div class="tutor">
+      <span class="avatar" aria-hidden="true" th:text="${#strings.substring(s.providerName,0,1)}"></span>
+      <strong th:text="${s.providerName}"></strong>
+      <span class="tag" th:text="${s.durationMinutes + ' min'}"></span>
+    </div>
+    <div class="when">
+      <strong th:text="${#temporals.format(s.startTime,'EEE, MMM d')}"></strong>
+      <span th:text="${#temporals.format(s.startTime,'HH:mm') + '–' + #temporals.format(s.endTime,'HH:mm') + ' UTC'}"></span>
+    </div>
+    <a class="button full" th:if="${account != null and account.role == 'CUSTOMER'}" th:href="@{/customer/book/{id}(id=${s.slotId})}">Book session <span aria-hidden="true">↗</span></a>
+    <a class="button full" th:if="${account == null}" th:href="@{/login}">Log in to book <span aria-hidden="true">↗</span></a>
+    <span class="muted" th:if="${account != null and account.role == 'PROVIDER'}">Customer accounts can book sessions.</span>
+  </article>
+</section>
+<nav th:if="${!slots.items.isEmpty() and (slots.page > 0 or slots.hasNext())}" class="pagination" aria-label="Session pages"><a th:if="${slots.page > 0}" th:href="@{/slots(page=${slots.page - 1},size=${slots.size},providerId=${providerId},serviceId=${serviceId},date=${date})}">← Previous</a><span th:text="${'Page ' + (slots.page + 1)}"></span><a th:if="${slots.hasNext()}" th:href="@{/slots(page=${slots.page + 1},size=${slots.size},providerId=${providerId},serviceId=${serviceId},date=${date})}">Next →</a></nav>
+</main><footer>LEARN WITH PURPOSE <span>TutorConnect · All appointment times are UTC</span></footer></body></html>

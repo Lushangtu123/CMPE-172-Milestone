@@ -138,6 +138,10 @@ Spring AI adds a customer assistant at `/customer/assistant`, server-enforced co
 vector-grounded policy answers, and scheduled personalized reminders through the existing
 notification outbox. Providers can run their reminder agent from the dashboard.
 
+Customers can open **Chat history** to read saved conversations after starting a new chat or
+signing in again. Past conversations are read-only. The current model context and pending
+appointment confirmations remain tied to the login session.
+
 The original app works with AI disabled. To enable real Gemini calls, copy `.env.example`
 to `.env`, set your Google AI Studio key locally, then run `docker compose up -d --build --wait`.
 Never commit `.env` or put a key in a report, screenshot or video. Model names can be overridden

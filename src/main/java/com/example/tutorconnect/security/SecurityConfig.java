@@ -1,12 +1,16 @@
 package com.example.tutorconnect.security;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.*;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
 
 @Configuration
 public class SecurityConfig {
@@ -55,7 +59,7 @@ public class SecurityConfig {
                     .hasRole("PROVIDER")
                     .anyRequest()
                     .authenticated())
-        .formLogin(f -> f.loginPage("/login").defaultSuccessUrl("/slots", true).permitAll())
+        .formLogin(f -> f.loginPage("/login").successHandler(loginDestination()).permitAll())
         .logout(l -> l.logoutSuccessUrl("/login?logout"))
         .exceptionHandling(
             e ->
@@ -86,5 +90,23 @@ public class SecurityConfig {
                           }
                         }));
     return http.build();
+  }
+
+  private SavedRequestAwareAuthenticationSuccessHandler loginDestination() {
+    var handler =
+        new SavedRequestAwareAuthenticationSuccessHandler() {
+          @Override
+          protected String determineTargetUrl(
+              HttpServletRequest request,
+              HttpServletResponse response,
+              Authentication authentication) {
+            return authentication.getAuthorities().stream()
+                    .anyMatch(authority -> authority.getAuthority().equals("ROLE_PROVIDER"))
+                ? "/provider/dashboard"
+                : "/slots";
+          }
+        };
+    handler.setAlwaysUseDefaultTargetUrl(true);
+    return handler;
   }
 }

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Chat history · TutorConnect</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <link rel="stylesheet" href="/assets/assistant.css">
+</head>
+<body class="assistant-page">
+<header th:replace="~{fragments :: nav}"></header>
+<main id="main-content" tabindex="-1" class="task-page chat-history">
+  <div class="page-heading">
+    <div><h1>Chat history</h1></div>
+    <a class="outline" th:href="@{/customer/assistant}">Back to assistant</a>
+  </div>
+  <div id="history-content">
+  <th:block th:if="${transcript == null}">
+    <p class="empty" th:if="${threads.isEmpty() and page == 0}">Your saved conversations will appear here after the assistant replies.</p>
+    <p class="empty" th:if="${threads.isEmpty() and page > 0}">No conversations on this page.</p>
+    <th:block th:replace="~{:: chatList(${threads})}"></th:block>
+    <nav class="pagination" aria-label="Chat history pages" th:if="${page > 0 or hasNext}">
+      <a th:if="${page > 0}" th:href="@{/customer/assistant/history(page=${page - 1})}">← Previous</a>
+      <a th:if="${hasNext}" th:href="@{/customer/assistant/history(page=${page + 1})}">Next →</a>
+    </nav>
+  </th:block>
+  <section th:if="${transcript != null}" aria-labelledby="transcript-title">
+    <a class="history-back" th:href="@{/customer/assistant/history}">← All conversations</a>
+    <h2 id="transcript-title" th:text="${transcript.thread.title}"></h2>
+    <div class="saved-transcript">
+      <article class="turn" th:each="message : ${transcript.messages}"
+               th:classappend="${message.role == 'user' ? 'customer-turn' : 'assistant-turn'}">
+        <strong th:text="${message.role == 'user' ? 'You' : 'TutorConnect'}"></strong>
+        <p th:text="${message.text}"></p>
+      </article>
+    </div>
+  </section>
+  </div>
+</main>
+<th:block th:remove="all">
+    <ul class="saved-chat-list" th:fragment="chatList(threads)" th:unless="${threads.isEmpty()}">
+      <li th:each="thread : ${threads}">
+        <a data-history-link th:href="@{/customer/assistant/history/{id}(id=${thread.id})}">
+          <strong th:text="${thread.title}"></strong>
+          <time th:datetime="${thread.updatedAt + 'Z'}" th:text="${#temporals.format(thread.updatedAt, 'MMM d, yyyy · HH:mm') + ' UTC'}"></time>
+        </a>
+      </li>
+    </ul>
+</th:block>
+</body>
+</html>

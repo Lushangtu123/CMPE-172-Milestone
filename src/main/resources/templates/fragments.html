@@ -1,3 +1,42 @@
-<!DOCTYPE html><html lang="en" xmlns:th="http://www.thymeleaf.org"><body>
-<header th:fragment="nav" class="nav"><a class="brand" href="/">tutor<span>connect</span><i>↗</i></a><nav aria-label="Main navigation"><a href="/slots">Find a session</a><a th:if="${account != null and account.role == 'CUSTOMER'}" href="/customer/appointments">My appointments</a><a th:if="${account != null and account.role == 'PROVIDER'}" href="/provider/dashboard">My dashboard</a><a class="button small" th:if="${account == null}" href="/login">Log in</a><span class="account" th:if="${account != null}" th:text="${account.name}"></span><form th:if="${account != null}" th:action="@{/logout}" method="post"><button class="text-button">Log out</button></form><a th:if="${account != null and account.role == 'CUSTOMER'}" href="/customer/assistant">AI assistant</a></nav></header>
-</body></html>
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+<header th:fragment="nav" class="nav">
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <a class="brand" th:href="@{/}" th:attr="aria-current=${currentPath == '/' ? 'page' : null}">tutor<span>connect</span><i aria-hidden="true">↗</i></a>
+  <nav class="primary-nav" aria-label="Main navigation">
+    <a th:href="@{/slots}" th:attr="aria-current=${currentPath == '/slots' ? 'page' : null}">Find a session</a>
+    <a th:if="${account != null and account.role == 'CUSTOMER'}" th:href="@{/customer/appointments}" th:attr="aria-current=${currentPath == '/customer/appointments' ? 'page' : null}">My appointments</a>
+    <a th:if="${account != null and account.role == 'CUSTOMER'}" th:href="@{/customer/assistant}" th:attr="aria-current=${currentPath == '/customer/assistant' ? 'page' : null}">AI assistant</a>
+    <a th:if="${account != null and account.role == 'PROVIDER'}" th:href="@{/provider/dashboard}" th:attr="aria-current=${currentPath == '/provider/dashboard' ? 'page' : null}">My dashboard</a>
+  </nav>
+  <div class="nav-account">
+    <a th:if="${account == null}" class="button small" th:href="@{/login}" th:attr="aria-current=${currentPath == '/login' ? 'page' : null}">Log in</a>
+    <span th:if="${account != null}" class="account" th:text="${account.name}"></span>
+    <form th:if="${account != null}" th:action="@{/logout}" method="post"><button class="text-button">Log out</button></form>
+  </div>
+</header>
+<article th:fragment="appointmentRow(a)" class="appointment">
+  <div>
+    <span class="tag" th:text="${a.status}"></span>
+    <h3 th:text="${a.serviceName}"></h3>
+    <p th:text="${a.customerName}"></p>
+  </div>
+  <div class="when">
+    <strong th:text="${#temporals.format(a.startTime,'EEE, MMM d yyyy')}"></strong>
+    <span th:text="${#temporals.format(a.startTime,'HH:mm') + '–' + #temporals.format(a.endTime,'HH:mm') + ' UTC'}"></span>
+  </div>
+</article>
+<article th:fragment="slotRow(s, historical)" class="appointment">
+  <div>
+    <span class="tag" th:text="${historical and s.status == 'OPEN' ? 'Expired' : s.status}"></span>
+    <h3 th:text="${s.serviceName}"></h3>
+  </div>
+  <div class="when">
+    <strong th:text="${#temporals.format(s.startTime,'EEE, MMM d yyyy')}"></strong>
+    <span th:text="${#temporals.format(s.startTime,'HH:mm') + '–' + #temporals.format(s.endTime,'HH:mm') + ' UTC'}"></span>
+  </div>
+  <a th:if="${!historical and s.status == 'OPEN'}" class="outline danger" th:href="@{/provider/slots/{id}/remove(id=${s.slotId})}">Remove slot</a>
+</article>
+</body>
+</html>

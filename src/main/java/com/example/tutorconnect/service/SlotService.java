@@ -50,6 +50,16 @@ public class SlotService {
     return slots.find(id).orElseThrow(() -> new AppException(NOT_FOUND, "Slot not found."));
   }
 
+  public SlotDto findRemovable(long user, long id) {
+    var slot = find(id);
+    if (slots.ownedService(slot.serviceId(), user) == null)
+      throw new AppException(FORBIDDEN, "You can only remove your own slots.");
+    if (!"OPEN".equals(slot.status()))
+      throw new AppException(CONFLICT, "A reserved slot cannot be removed.");
+    requireFutureRemoval(slot.startTime());
+    return slot;
+  }
+
   @Transactional(isolation = Isolation.READ_COMMITTED)
   public void create(long user, long service, LocalDateTime start, LocalDateTime end) {
     if (service <= 0
@@ -71,6 +81,15 @@ public class SlotService {
 
   @Transactional(isolation = Isolation.READ_COMMITTED)
   public void remove(long user, long id) {
+    remove(user, id, false);
+  }
+
+  @Transactional(isolation = Isolation.READ_COMMITTED)
+  public void removeUpcoming(long user, long id) {
+    remove(user, id, true);
+  }
+
+  private void remove(long user, long id, boolean upcomingOnly) {
     var slot =
         slots
             .lock(id)
@@ -80,6 +99,13 @@ public class SlotService {
       throw new AppException(FORBIDDEN, "You can only remove your own slots.");
     if (appointments.occupied(id))
       throw new AppException(CONFLICT, "A reserved slot cannot be removed.");
+    if (upcomingOnly) requireFutureRemoval(slot.startTime());
     slots.deactivate(id);
+  }
+
+  private void requireFutureRemoval(LocalDateTime startTime) {
+    if (!startTime.isAfter(LocalDateTime.now(ZoneOffset.UTC)))
+      throw new AppException(
+          CONFLICT, "Only future availability can be removed from the dashboard.");
   }
 }
