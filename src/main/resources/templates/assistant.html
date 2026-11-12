@@ -1,13 +1,48 @@
 <!DOCTYPE html>
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TutorConnect Assistant</title><link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/assistant.css"><script src="/assets/assistant.js" defer></script></head>
-<body><header th:replace="~{fragments :: nav}"></header><main>
-<section class="page-heading"><div><p class="eyebrow">YOUR STUDY PLANS</p><h1>Tutoring <em>assistant.</em></h1><p>Find a session, manage your appointments, or ask about our policies. All times are UTC.</p></div></section>
-<section class="assistant-layout"><div>
-<div id="conversation" class="conversation" role="log" aria-live="polite" aria-label="Conversation"><p class="muted">Try “Find the earliest algebra session this week” or “What is the cancellation policy?”</p></div>
-<p id="agent-status" class="muted" role="status" aria-live="polite"></p>
-<p id="agent-error" class="error" role="alert"></p>
-<section id="proposal" class="proposal" hidden><h2>Review before confirming</h2><p id="proposal-summary"></p><p class="muted">Nothing changes until you confirm. This proposal expires after 5 minutes.</p><button id="confirm" class="button" type="button">Confirm this action</button> <button id="discard" type="button">Discard</button></section>
-<form id="chat-form" th:action="@{/api/customer/ai/chat}" method="post"><label for="message">Your message</label><textarea id="message" name="message" rows="3" maxlength="2000" required placeholder="What would you like to plan?"></textarea><div class="assistant-actions"><button class="button" id="send">Send message</button><button id="reset" type="button">Clear conversation</button></div></form>
-</div><aside><h2>You stay in control</h2><p>The assistant checks live availability. Review the exact subject, tutor and UTC time in the confirmation summary.</p><p>Another customer may take a session before you confirm. If that happens, ask for alternatives.</p><p>Policy answers use TutorConnect’s demo FAQ. Your conversation stays in this login session.</p><a href="/customer/appointments">View my appointments</a></aside></section>
-</main></body></html>
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Your study assistant · TutorConnect</title>
+  <link rel="stylesheet" href="/assets/app.css"><link rel="stylesheet" href="/assets/assistant.css">
+  <script src="/assets/assistant.js" defer></script>
+</head>
+<body class="assistant-page">
+<header th:replace="~{fragments :: nav}"></header>
+<main class="assistant-main">
+  <div class="assistant-heading"><div><p class="eyebrow">A LITTLE SUPPORT GOES A LONG WAY</p><h1>Your study <em>companion.</em></h1></div><span class="timezone-label"><span aria-hidden="true">◷</span> All session times in UTC</span></div>
+  <div class="assistant-workspace">
+    <aside class="assistant-sidebar" aria-label="Assistant guide">
+      <div class="workspace-label">YOUR WORKSPACE</div>
+      <a class="workspace-link current" href="/customer/assistant" aria-current="page"><span class="workspace-icon" aria-hidden="true">↗</span> Study assistant <span class="current-dot" aria-hidden="true"></span></a>
+      <a class="workspace-link" href="/customer/appointments"><span class="workspace-icon" aria-hidden="true">▦</span> My appointments</a>
+      <a class="workspace-link" href="/slots"><span class="workspace-icon" aria-hidden="true">⌕</span> Explore sessions</a>
+      <div class="sidebar-note"><div class="note-illustration" aria-hidden="true"><svg viewBox="0 0 100 96" fill="none"><path d="M50 81V42M50 60C25 59 20 37 20 27c21 0 31 10 30 33ZM50 45c0-22 13-30 31-32 1 18-10 32-31 32Z" stroke="currentColor" stroke-width="1.5"/><path d="M27 84h46M34 89h32" stroke="currentColor" stroke-width="1.5"/><circle cx="79" cy="66" r="9" stroke="currentColor"/><path d="M79 62v8m-4-4h8" stroke="currentColor"/></svg></div><p class="note-caption">SMALL STEPS. REAL PROGRESS.</p><h2>Make room<br>for your next<br><em>breakthrough.</em></h2><p>A session, a question, a fresh perspective. Start wherever you are.</p></div>
+      <div class="sidebar-footnote"><span class="small-ring" aria-hidden="true">✓</span><p>You're in control.<br><span>Every booking needs your confirmation.</span></p></div>
+    </aside>
+    <section class="chat-card" aria-label="Tutoring assistant">
+      <div class="chat-toolbar"><div class="assistant-identity"><span class="assistant-mark small" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M8 23V9c4-1 7 0 8 3 1-3 4-4 8-3v14c-4-1-7 0-8 2-1-2-4-3-8-2Z" stroke="currentColor" stroke-width="1.5"/><path d="M16 12v13" stroke="currentColor" stroke-width="1.5"/></svg></span><div><strong>TutorConnect assistant</strong><span>Here to help you plan your next step</span></div></div><button id="reset" class="new-chat-button" type="button" title="Clear this conversation and discard any pending action"><span aria-hidden="true">＋</span> New chat</button></div>
+      <div class="chat-content">
+        <div id="assistant-welcome" class="assistant-welcome">
+          <span class="welcome-kicker">LET'S FIND YOUR FOCUS</span>
+          <h2>A little guidance.<br>A <em>clearer plan.</em></h2>
+          <p>Find the right session, take care of your appointments,<br class="desktop-break"> or get a quick answer. What’s on your mind?</p>
+          <div class="prompt-grid" aria-label="Suggested questions">
+            <button type="button" class="prompt-card" data-prompt="Find the earliest algebra session in the next seven days."><span class="prompt-icon" aria-hidden="true">↗</span><strong>Find my next session</strong><span>Discover a time that works</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>
+            <button type="button" class="prompt-card" data-prompt="List my upcoming appointments."><span class="prompt-icon" aria-hidden="true">▦</span><strong>See my appointments</strong><span>Keep your plans in view</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>
+            <button type="button" class="prompt-card" data-prompt="What is the cancellation policy? Cite the policy source."><span class="prompt-icon question" aria-hidden="true">?</span><strong>Ask about a policy</strong><span>A little clarity before you book</span><span class="prompt-arrow" aria-hidden="true">↗</span></button>
+          </div>
+        </div>
+        <div id="conversation" class="conversation" role="log" aria-live="polite" aria-label="Conversation"></div>
+        <section id="proposal" class="proposal" hidden><div class="proposal-label"><span aria-hidden="true">✓</span> YOUR CONFIRMATION</div><h2>Does this look right?</h2><p id="proposal-summary"></p><p class="proposal-detail">Review the details before confirming. This proposal expires in 5 minutes.</p><div class="proposal-actions"><button id="confirm" class="button" type="button">Confirm this action</button><button id="discard" class="secondary-button" type="button">Discard</button></div></section>
+      </div>
+      <div class="composer-area">
+        <p id="agent-status" class="agent-status" role="status" aria-live="polite"></p>
+        <p id="agent-error" class="agent-error" role="alert"></p>
+        <form id="chat-form" class="chat-composer" th:action="@{/api/customer/ai/chat}" method="post"><label for="message" class="visually-hidden">Your message</label><textarea id="message" name="message" rows="2" maxlength="2000" required placeholder="Ask a question or plan your next session…"></textarea><div class="composer-bottom"><span class="composer-hint">A good place to start is a question.</span><button class="button send-button" id="send">Send message</button></div></form>
+        <p class="assistant-disclaimer"><span aria-hidden="true">⌁</span> AI can make mistakes. Review session details before you confirm.</p>
+      </div>
+    </section>
+  </div>
+  <div class="assistant-page-footer"><span>LEARN WITH PURPOSE</span><span>A little guidance. A big difference.</span></div>
+</main>
+</body></html>

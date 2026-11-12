@@ -4,6 +4,7 @@
   const log = document.getElementById('conversation');
   const status = document.getElementById('agent-status');
   const send = document.getElementById('send');
+  const welcome = document.getElementById('assistant-welcome');
   const proposal = document.getElementById('proposal');
   let pending = null;
   let busy = false;
@@ -41,6 +42,7 @@
   }
   function render(data) {
     log.replaceChildren();
+    if (welcome) welcome.hidden = (data.messages || []).length > 0;
     for (const turn of data.messages || []) {
       const article = document.createElement('article'); article.className = 'turn ' + (turn.role === 'user' ? 'customer-turn' : 'assistant-turn');
       const label = document.createElement('strong'); label.textContent = turn.role === 'user' ? 'You' : 'TutorConnect';
@@ -74,5 +76,13 @@
     finally {render(await request('history'));}
   }));
   for (const name of ['discard','reset']) document.getElementById(name).addEventListener('click', () => action(async () => render(await request(name, {}))));
+  for (const prompt of document.querySelectorAll('[data-prompt]')) {
+    prompt.addEventListener('click', () => {
+      if (busy) return;
+      const message = document.getElementById('message');
+      message.value = prompt.getAttribute('data-prompt');
+      message.focus();
+    });
+  }
   action(async () => render(await request('history')));
 })();
