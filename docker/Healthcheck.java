@@ -7,7 +7,7 @@ public class Healthcheck {
     try {
       var client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(1)).build();
       var request =
-          HttpRequest.newBuilder(URI.create("http://127.0.0.1:8080/health"))
+          HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + System.getenv().getOrDefault("PORT", "8080") + "/health"))
               .timeout(Duration.ofSeconds(2))
               .GET()
               .build();

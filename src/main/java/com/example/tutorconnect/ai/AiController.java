@@ -75,6 +75,29 @@ public class AiController {
     }
   }
 
+  @GetMapping("/api/customer/ai/conversations")
+  @ResponseBody
+  Map<String, Object> conversations(
+      @AuthenticationPrincipal Account actor, @RequestParam(defaultValue = "0") int page) {
+    if (page < 0) throw new AppException(HttpStatus.BAD_REQUEST, "Invalid history page.");
+    var threads =
+        historyStore.recent(actor.id(), HISTORY_PAGE_SIZE + 1, (long) page * HISTORY_PAGE_SIZE);
+    return Map.of(
+        "items",
+        threads.stream().limit(HISTORY_PAGE_SIZE).toList(),
+        "page",
+        page,
+        "hasNext",
+        threads.size() > HISTORY_PAGE_SIZE);
+  }
+
+  @GetMapping("/api/customer/ai/conversations/{threadId}")
+  @ResponseBody
+  AiChatHistory.Transcript conversation(
+      @AuthenticationPrincipal Account actor, @PathVariable long threadId) {
+    return historyStore.transcript(actor.id(), threadId);
+  }
+
   @GetMapping("/api/customer/ai/history")
   @ResponseBody
   Map<String, Object> history(@AuthenticationPrincipal Account actor, HttpSession session) {

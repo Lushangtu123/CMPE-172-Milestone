@@ -1,8 +1,36 @@
-# TutorConnect Milestone 4
+# TutorConnect
 
-TutorConnect is a tutoring appointment system with a Gemini-powered scheduling assistant, policy Q&A and scheduled study reminders. It uses Java 17, Spring Boot 4.1.1, Spring AI 2.0.2, Spring Security, Thymeleaf and MySQL. Database access uses parameterized SQL through JdbcTemplate.
+TutorConnect is a tutoring appointment system with a Gemini-powered scheduling assistant, policy Q&A and scheduled study reminders. Its React, TypeScript and Vite frontend calls a Java 17 / Spring Boot 4.1.1 backend with Spring AI 2.0.2 and Spring Security. Database access uses parameterized SQL through JdbcTemplate. The cloud configuration targets a Vercel frontend, Railway backend and AWS RDS MySQL database.
 
 Customers find sessions and manage their appointments. Providers manage availability and upcoming appointments. Both normal and AI-confirmed bookings use the same transactional service to prevent double-booking.
+
+## React development
+
+Requirements: Node.js 24, JDK 17 and Maven. Start the backend with disposable H2 demo data:
+
+```sh
+mvn spring-boot:run -Dspring-boot.run.profiles=demo
+```
+
+In another terminal, start the React frontend:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open [TutorConnect React](http://127.0.0.1:5173). Vite proxies `/api`, `/login` and `/logout` to the backend on port 8080. Set `API_PROXY_TARGET` in `frontend/.env.local` if your backend uses a different port. Authentication uses an HttpOnly server session cookie and CSRF headers; no login token is stored in localStorage. The frontend refreshes the CSRF token after login and logout.
+
+React routes include `/sessions`, `/book/:id`, `/appointments`, `/appointments/:id`, `/assistant`, `/provider` and `/sign-in`. Customers can browse their saved, owner-scoped chat transcripts without replacing the active conversation. The provider workspace includes availability, appointments and study reminders.
+
+```sh
+cd frontend
+npm test
+npm run build
+```
+
+The original Thymeleaf pages remain available on the backend URLs described below, including the course walkthrough routes. See [cloud deployment configuration](deploy/README.md) for RDS initialization, Railway variables and Vercel routing.
 
 ## Milestone 4 features
 

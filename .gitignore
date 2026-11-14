@@ -12,3 +12,9 @@ target/
 !.env.example
 __pycache__/
 *.pyc
+node_modules/
+frontend/dist/
+.vercel/
+*.p12
+*.jks
+.local/

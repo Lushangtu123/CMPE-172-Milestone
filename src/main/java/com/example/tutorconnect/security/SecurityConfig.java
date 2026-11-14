@@ -1,7 +1,9 @@
 package com.example.tutorconnect.security;
 
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import org.springframework.context.annotation.*;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -50,6 +52,9 @@ public class SecurityConfig {
                         "/assets/**",
                         "/api/home",
                         "/api/slots",
+                        "/api/slots/*",
+                        "/api/catalog",
+                        "/api/session",
                         "/health",
                         "/error")
                     .permitAll()
@@ -59,13 +64,33 @@ public class SecurityConfig {
                     .hasRole("PROVIDER")
                     .anyRequest()
                     .authenticated())
-        .formLogin(f -> f.loginPage("/login").successHandler(loginDestination()).permitAll())
-        .logout(l -> l.logoutSuccessUrl("/login?logout"))
+        .formLogin(
+            f ->
+                f.loginPage("/login")
+                    .successHandler(loginDestination())
+                    .failureHandler(
+                        (req, res, ex) -> {
+                          if (wantsJson(req)) {
+                            res.setStatus(401);
+                            res.setContentType("application/json");
+                            res.getWriter()
+                                .write(
+                                    "{\"status\":401,\"message\":\"Invalid email or password.\"}");
+                          } else res.sendRedirect("/login?error");
+                        })
+                    .permitAll())
+        .logout(
+            l ->
+                l.logoutSuccessHandler(
+                    (req, res, auth) -> {
+                      if (wantsJson(req)) res.setStatus(204);
+                      else res.sendRedirect("/login?logout");
+                    }))
         .exceptionHandling(
             e ->
                 e.authenticationEntryPoint(
                         (req, res, ex) -> {
-                          if (req.getRequestURI().startsWith("/api/")) {
+                          if (req.getRequestURI().startsWith("/api/") || wantsJson(req)) {
                             res.setStatus(401);
                             res.setContentType("application/json");
                             res.getWriter()
@@ -75,7 +100,7 @@ public class SecurityConfig {
                     .accessDeniedHandler(
                         (req, res, ex) -> {
                           res.setStatus(403);
-                          if (req.getRequestURI().startsWith("/api/")) {
+                          if (req.getRequestURI().startsWith("/api/") || wantsJson(req)) {
                             res.setContentType("application/json");
                             res.getWriter()
                                 .write("{\"status\":403,\"message\":\"Access denied.\"}");
@@ -96,6 +121,19 @@ public class SecurityConfig {
     var handler =
         new SavedRequestAwareAuthenticationSuccessHandler() {
           @Override
+          public void onAuthenticationSuccess(
+              HttpServletRequest request,
+              HttpServletResponse response,
+              Authentication authentication)
+              throws IOException, ServletException {
+            if (wantsJson(request)) {
+              clearAuthenticationAttributes(request);
+              request.getSession().removeAttribute("SPRING_SECURITY_SAVED_REQUEST");
+              response.setStatus(204);
+            } else super.onAuthenticationSuccess(request, response, authentication);
+          }
+
+          @Override
           protected String determineTargetUrl(
               HttpServletRequest request,
               HttpServletResponse response,
@@ -108,5 +146,10 @@ public class SecurityConfig {
         };
     handler.setAlwaysUseDefaultTargetUrl(true);
     return handler;
+  }
+
+  private static boolean wantsJson(HttpServletRequest request) {
+    String accept = request.getHeader("Accept");
+    return accept != null && accept.contains("application/json");
   }
 }

@@ -21,6 +21,11 @@ public class AppointmentController {
     return appointments.customer(a.id());
   }
 
+  @GetMapping("/api/customer/appointments/{id}")
+  public AppointmentDto owned(@AuthenticationPrincipal Account a, @PathVariable long id) {
+    return appointments.owned(a.id(), id);
+  }
+
   @GetMapping("/api/provider/appointments")
   public List<AppointmentDto> provider(@AuthenticationPrincipal Account a) {
     return appointments.provider(a.id());
