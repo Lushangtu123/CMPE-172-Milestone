@@ -117,6 +117,7 @@ export function Home() {
           <h2>
             Small steps.
             <br />
+            {" "}
             <em>Lasting confidence.</em>
           </h2>
         </div>

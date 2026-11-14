@@ -2063,7 +2063,7 @@ dialog .actions {
     padding-bottom: 28px;
   }
   .hero-copy h1 {
-    font-size: 65px;
+    font-size: clamp(44px, 15vw, 65px);
     line-height: 1.01;
   }
   .hero-copy .eyebrow {
