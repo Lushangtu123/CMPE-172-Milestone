@@ -13,7 +13,8 @@ WORKDIR /app
 COPY --from=build --chown=10001:10001 /build/target/tutorconnect-0.0.1-SNAPSHOT.jar /app/app.jar
 COPY --from=build --chown=10001:10001 /build/health /app/health
 COPY --from=build --chown=10001:10001 /build/rds-ca.p12 /app/rds-ca.p12
+COPY --chown=10001:10001 docker/start.sh /app/start.sh
 USER 10001:10001
 EXPOSE 8080
 HEALTHCHECK --interval=10s --timeout=4s --start-period=45s --retries=5 CMD ["java", "-cp", "/app/health", "Healthcheck"]
-ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+ENTRYPOINT ["sh", "/app/start.sh"]

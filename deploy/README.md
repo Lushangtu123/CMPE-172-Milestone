@@ -45,6 +45,8 @@ Required variables:
 
 To enable AI, set `AI_ENABLED=true`, `GEMINI_API_KEY`, `GEMINI_CHAT_MODEL=gemini-3.1-flash-lite`, `GEMINI_EMBEDDING_MODEL=gemini-embedding-001` and `AI_REMINDERS_ENABLED=true`. The notification transport remains a local demo sink; it does not send real email. Railway supplies `PORT`, and the RDS profile uses secure cookies and forwarded HTTPS headers. Generate an HTTPS service domain and wait for `/health` to pass before connecting the frontend. Review Railway's remaining trial credits and enforce spending limits in the workspace settings.
 
+For the initial IP allowlist setup, optionally set `RDS_REPORT_EGRESS=true` and `RDS_WAIT_FOR_NETWORK=true`, and allow a 900-second deployment healthcheck timeout. The entrypoint logs the service's current outbound IPv4 address using AWS's public IP-check endpoint and waits up to roughly seven minutes for the MySQL TCP port. Add that specific `/32` to RDS's security group. The subsequent JDBC connection still verifies TLS, credentials and database access. These diagnostics are off by default. Remove the diagnostic variables after setup when using a stable outbound IP; changing trial egress may require repeating the allowlist step. A different destination or connection can use a different shared egress address, so a one-time trial IP probe is not a substitute for a static IP when stable hosting is required.
+
 ## Vercel frontend
 
 Import the repository as a new project. Set the root directory to `frontend`, select Node.js 24 and use the checked-in `vercel.json`. Keep the framework preset **Other** so the Build Output API configuration controls routing.
