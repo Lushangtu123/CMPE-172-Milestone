@@ -31,7 +31,9 @@ The Docker build downloads AWS's regional public CA bundle and builds `/app/rds-
 
 ## Railway backend
 
-Connect this repository and select the `react-rds-upgrade` branch while evaluating the upgrade. The root `railway.json` selects the Dockerfile, `/health` readiness check and one replica. Configure the variables from `.env.rds` using Railway's private variable editor. No database password or Gemini key belongs in git or frontend variables.
+Create an empty Railway service, connect this repository and select the `react-rds-upgrade` branch before deploying. Set the builder to Dockerfile, the healthcheck path to `/health`, the healthcheck timeout to 180 seconds, replicas to 1, and restart-on-failure retries to 3. Configure the variables from `.env.rds` using Railway's private variable editor. No database password or Gemini key belongs in git or frontend variables.
+
+Railway's current dashboard says new services cannot use the deprecated `railway.json` Config as Code format. These deployment settings are configured in the dashboard; a future IaC setup should use the current `.railway/railway.ts` workflow rather than adding a legacy JSON file.
 
 Required variables:
 
